@@ -6,6 +6,7 @@
 
 #include "SplashScreen.hpp"
 #include "Rendering/GlobalRendering.h"
+#include "Rendering/GlobalRenderingInfo.h"
 #include "Rendering/GL/myGL.h"
 #include "Rendering/GL/RenderBuffers.h"
 #include "Rendering/Fonts/glFont.h"
@@ -71,7 +72,10 @@ void ShowSplashScreen(
 	auto& sh = rb.GetShader();
 
 	glPushAttrib(GL_ENABLE_BIT);
-	glEnable(GL_TEXTURE_2D);
+	// Texture target enable state was removed from Core profiles. Binding and
+	// sampling through the RenderBuffer shader is sufficient there.
+	if (!globalRenderingInfo.glContextIsCore)
+		glEnable(GL_TEXTURE_2D);
 
 	for (spring_time t0 = spring_now(), t1 = t0; !testDoneFunc(); t1 = spring_now()) {
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -117,4 +121,3 @@ void ShowSplashScreen(
 	glDeleteTextures(1, &splashTex);
 }
 #endif
-

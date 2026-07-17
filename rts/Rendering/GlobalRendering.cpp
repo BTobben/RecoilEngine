@@ -832,7 +832,7 @@ void CGlobalRendering::CheckGLExtensions()
 		constexpr GLenum GL_DEBUG_TOOL_PURPOSE_EXT = 0x678B;
 		// For OpenGL:
 		// if GL_EXT_debug_tool is present (see https://renderdoc.org/debug_tool.txt)
-		if (glIsEnabled(GL_DEBUG_TOOL_EXT)) {
+		if (IsExtensionSupported("GL_EXT_debug_tool") && glIsEnabled(GL_DEBUG_TOOL_EXT)) {
 			auto debugStr = reinterpret_cast<const char*>(glGetString(GL_DEBUG_TOOL_NAME_EXT));
 			LOG("[GR::%s] Detected external GL debug tool %s, enabling compatibility mode", __func__, debugStr);
 			underExternalDebug = true;
@@ -847,12 +847,20 @@ void CGlobalRendering::CheckGLExtensions()
 	char errMsg[2048] = {0};
 	char* ptr = &extMsg[0];
 
-	if (!GLAD_GL_ARB_multitexture       ) ptr += snprintf(ptr, sizeof(extMsg) - (ptr - extMsg), " multitexture ");
-	if (!GLAD_GL_ARB_texture_env_combine) ptr += snprintf(ptr, sizeof(extMsg) - (ptr - extMsg), " texture_env_combine ");
-	if (!GLAD_GL_ARB_texture_compression) ptr += snprintf(ptr, sizeof(extMsg) - (ptr - extMsg), " texture_compression ");
-	if (!GLAD_GL_ARB_texture_float)       ptr += snprintf(ptr, sizeof(extMsg) - (ptr - extMsg), " texture_float ");
-	if (!GLAD_GL_ARB_texture_non_power_of_two) ptr += snprintf(ptr, sizeof(extMsg) - (ptr - extMsg), " texture_non_power_of_two ");
-	if (!GLAD_GL_ARB_framebuffer_object)       ptr += snprintf(ptr, sizeof(extMsg) - (ptr - extMsg), " framebuffer_object ");
+	if (!(GLAD_GL_VERSION_1_3 || GLAD_GL_ARB_multitexture))
+		ptr += snprintf(ptr, sizeof(extMsg) - (ptr - extMsg), " multitexture ");
+	// Texture environments were removed from Core profiles; shader-based
+	// rendering does not need this compatibility-only extension there.
+	if (!globalRenderingInfo.glContextIsCore && !GLAD_GL_ARB_texture_env_combine)
+		ptr += snprintf(ptr, sizeof(extMsg) - (ptr - extMsg), " texture_env_combine ");
+	if (!(GLAD_GL_VERSION_1_3 || GLAD_GL_ARB_texture_compression))
+		ptr += snprintf(ptr, sizeof(extMsg) - (ptr - extMsg), " texture_compression ");
+	if (!(GLAD_GL_VERSION_3_0 || GLAD_GL_ARB_texture_float))
+		ptr += snprintf(ptr, sizeof(extMsg) - (ptr - extMsg), " texture_float ");
+	if (!(GLAD_GL_VERSION_2_0 || GLAD_GL_ARB_texture_non_power_of_two))
+		ptr += snprintf(ptr, sizeof(extMsg) - (ptr - extMsg), " texture_non_power_of_two ");
+	if (!(GLAD_GL_VERSION_3_0 || GLAD_GL_ARB_framebuffer_object))
+		ptr += snprintf(ptr, sizeof(extMsg) - (ptr - extMsg), " framebuffer_object ");
 
 	if (extMsg[0] == 0)
 		return;
@@ -1023,9 +1031,12 @@ void CGlobalRendering::QueryGLMaxVals()
 {
 	// maximum 2D texture size
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
-	glGetIntegerv(GL_MAX_TEXTURE_COORDS, &maxTexSlots);
 	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &maxFragShSlots);
 	glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &maxCombShSlots);
+	if (globalRenderingInfo.glContextIsCore)
+		maxTexSlots = maxFragShSlots;
+	else
+		glGetIntegerv(GL_MAX_TEXTURE_COORDS, &maxTexSlots);
 
 	if (GLAD_GL_EXT_texture_filter_anisotropic)
 		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &maxTexAnisoLvl);
@@ -1041,7 +1052,7 @@ void CGlobalRendering::QueryGLMaxVals()
 		glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE,      &glslMaxStorageBufferSize);
 	}
 
-	glGetIntegerv(GL_MAX_VARYING_FLOATS,                 &glslMaxVaryings);
+	glGetIntegerv(globalRenderingInfo.glContextIsCore ? GL_MAX_VARYING_COMPONENTS : GL_MAX_VARYING_FLOATS, &glslMaxVaryings);
 	glGetIntegerv(GL_MAX_VERTEX_ATTRIBS,                 &glslMaxAttributes);
 	glGetIntegerv(GL_MAX_DRAW_BUFFERS,                   &glslMaxDrawBuffers);
 	glGetIntegerv(GL_MAX_ELEMENTS_INDICES,               &glslMaxRecommendedIndices);
@@ -1794,7 +1805,9 @@ void CGlobalRendering::InitGLState()
 {
 	LOG("[GR::%s]", __func__);
 
-	glShadeModel(GL_SMOOTH);
+	// glShadeModel is compatibility state and has no Core-profile entry point.
+	if (!globalRenderingInfo.glContextIsCore)
+		glShadeModel(GL_SMOOTH);
 
 	glClearDepth(1.0f);
 	glDepthRange(0.0f, 1.0f);

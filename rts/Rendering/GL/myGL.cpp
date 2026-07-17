@@ -219,7 +219,8 @@ bool ShowDriverWarning(const char* glVendor)
 void WorkaroundATIPointSizeBug()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	if (!globalRendering->amdHacks)
+	// Point-sprite fixed-function state does not exist in Core profiles.
+	if (!globalRendering->amdHacks || globalRenderingInfo.glContextIsCore)
 		return;
 
 	GLboolean pointSpritesEnabled = false;

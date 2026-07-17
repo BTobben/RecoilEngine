@@ -156,4 +156,6 @@ struct SInstanceData {
 	uint32_t bposeMatOffset;
 };
 
+#include "LegacyGLState.h"
+
 #endif // _MY_GL_H

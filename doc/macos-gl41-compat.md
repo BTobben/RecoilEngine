@@ -49,14 +49,35 @@ multi-draw indirect as unavailable, and draw requests with a non-zero base
 instance report the missing OpenGL 4.2 capability instead of calling a null
 entry point.
 
+## Core-profile legacy draw state
+
+Existing `glPushAttrib`/`glPopAttrib` call sites are routed through a
+profile-aware stack. Compatibility contexts keep using the native OpenGL
+stack. Core contexts use an engine-owned stack that snapshots and restores
+the OpenGL 4.1 state which still exists: enable, color, depth, stencil,
+polygon, viewport, scissor, multisample, texture-binding, line, and point
+state. Nested pushes are supported and stack underflow is logged instead of
+dereferencing an unavailable entry point.
+
+Removed fixed-function groups such as current color, lighting, fog, matrix
+transform, display-list, and pixel-transfer state cannot be represented in a
+Core context. A request containing those bits emits a one-time warning; it
+does not claim that removed state was restored. Those callers still need to
+move their data to shaders and buffered geometry.
+
+Startup no longer requires compatibility-only texture-environment support,
+does not call `glShadeModel` in a Core context, and avoids removed Core-profile
+limit queries. The splash renderer also skips the obsolete texture-target
+enable while retaining its shader texture binding.
+
 ## Known limitations
 
 This foundation does **not** yet make the graphical engine playable on macOS.
-The engine and Lua drawing API still contain compatibility-profile operations
-such as immediate-mode drawing, matrix stacks, attribute stacks, alpha test,
-and client-state vertex arrays. Those entry points are removed from a 4.1 Core
-context and must be migrated to the existing buffered/shader drawing helpers
-before a macOS graphical smoke test can pass.
+The attribute stack has a Core-safe implementation, but the engine and Lua
+drawing API still contain compatibility-profile operations such as
+immediate-mode drawing, matrix stacks, alpha test, and client-state vertex
+arrays. Those entry points are removed from a 4.1 Core context and must be
+migrated to the existing buffered/shader drawing helpers.
 
 Additional work remains outside this capability layer:
 
