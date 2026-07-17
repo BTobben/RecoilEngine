@@ -68,3 +68,11 @@ state restoration. A pass is recorded in:
 This is still an experimental port. Passing the bounded startup test does not
 prove that every BAR widget, map, unit shader, sound path, or complete match is
 working.
+
+## Resume after an interrupted configuration
+
+The bootstrap is idempotent and reuses the existing source, Git LFS, CMake,
+and compiler caches. Fix the reported dependency and run the same one-command
+invocation again. For example, older bootstrap revisions omitted the 7-Zip
+binary required while packaging engine base content; install it with
+`brew install sevenzip` and rerun the bootstrap.

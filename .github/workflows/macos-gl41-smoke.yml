@@ -96,6 +96,7 @@ jobs:
           freetype
           expat
           xz
+          sevenzip
 
       - name: Configure graphical engine
         env:

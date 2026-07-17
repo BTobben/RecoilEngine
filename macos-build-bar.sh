@@ -107,7 +107,7 @@ ensure_homebrew() {
 
 ensure_brew_dependencies() {
 	local packages missing package
-	packages="ccache cmake ninja pkgconf sdl2-compat devil fontconfig freetype expat xz git-lfs openal-soft libogg libvorbis"
+	packages="ccache cmake ninja pkgconf sdl2-compat devil fontconfig freetype expat xz sevenzip git-lfs openal-soft libogg libvorbis"
 	missing=""
 	for package in $packages; do
 		if ! brew list --versions "$package" >/dev/null 2>&1; then
