@@ -84,9 +84,9 @@ jobs:
       - name: Fetch upstream engine version tags
         run: |
           if [ "$(git rev-parse --is-shallow-repository)" = 'true' ]; then
-            git fetch --unshallow --force --tags https://github.com/beyond-all-reason/RecoilEngine.git master
+            git fetch --no-recurse-submodules --unshallow --force --tags https://github.com/beyond-all-reason/RecoilEngine.git master
           else
-            git fetch --force --tags https://github.com/beyond-all-reason/RecoilEngine.git master
+            git fetch --no-recurse-submodules --force --tags https://github.com/beyond-all-reason/RecoilEngine.git master
           fi
           git describe --tags --match '[0-9]*' --long
 

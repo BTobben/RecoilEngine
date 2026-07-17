@@ -152,9 +152,9 @@ prepare_engine() {
 
 	log "Fetching upstream RecoilEngine version tags"
 	if [ "$(git -C "$ENGINE_ROOT" rev-parse --is-shallow-repository)" = "true" ]; then
-		git -C "$ENGINE_ROOT" fetch --unshallow --force --tags "$ENGINE_UPSTREAM_URL" master
+		git -C "$ENGINE_ROOT" fetch --no-recurse-submodules --unshallow --force --tags "$ENGINE_UPSTREAM_URL" master
 	else
-		git -C "$ENGINE_ROOT" fetch --force --tags "$ENGINE_UPSTREAM_URL" master
+		git -C "$ENGINE_ROOT" fetch --no-recurse-submodules --force --tags "$ENGINE_UPSTREAM_URL" master
 	fi
 	git -C "$ENGINE_ROOT" describe --tags --match '[0-9]*' --long >/dev/null \
 		|| die "no numeric upstream RecoilEngine version tag is reachable from $ENGINE_REF"
