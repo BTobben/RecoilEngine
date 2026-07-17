@@ -13,6 +13,9 @@ set(noSoundSources
 add_library(no-sound STATIC EXCLUDE_FROM_ALL ${noSoundSources})
 set_target_properties(no-sound PROPERTIES COMPILE_FLAGS "-DNO_SOUND")
 target_link_libraries(no-sound Tracy::TracyClient)
+if (ENABLE_STREFLOP)
+	target_link_libraries(no-sound PRIVATE streflop)
+endif ()
 
 # Define default sound implementation
 if    (NO_SOUND)
@@ -58,4 +61,7 @@ if    (NOT NO_SOUND)
 	target_link_libraries(sound OpenAL::OpenAL)
 	target_link_libraries(sound Tracy::TracyClient)
 	target_link_libraries(sound nowide::nowide)
+	if (ENABLE_STREFLOP)
+		target_link_libraries(sound PRIVATE streflop)
+	endif ()
 endif (NOT NO_SOUND)
