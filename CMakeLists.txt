@@ -685,6 +685,16 @@ add_dependencies(generateSources generateVersionFiles)
 option(USE_MIMALLOC "Use mimalloc memory allocator" TRUE)
 add_subdirectory(rts/lib)
 
+# Standalone engine libraries can include streflop_cond.h without linking the
+# streflop target directly. Keep every later target on the implementation mode
+# selected by streflop's own configuration (SSE, NEON, soft-float, or x87).
+if (ENABLE_STREFLOP)
+	get_target_property(STREFLOP_ENGINE_COMPILE_DEFINITIONS streflop INTERFACE_COMPILE_DEFINITIONS)
+	if (STREFLOP_ENGINE_COMPILE_DEFINITIONS)
+		add_compile_definitions(${STREFLOP_ENGINE_COMPILE_DEFINITIONS})
+	endif ()
+endif ()
+
 # Fix for MinGW assembler limitations with large object files
 if(MINGW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wa,-mbig-obj")
