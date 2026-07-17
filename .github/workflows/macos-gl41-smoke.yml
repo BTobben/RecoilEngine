@@ -8,6 +8,7 @@ on:
       - 'CMakeLists.txt'
       - 'rts/**'
       - 'doc/macos-gl41-*.md'
+      - 'macos-build-bar.sh'
   push:
     branches:
       - 'agent/macos-gl41-*'
@@ -16,6 +17,7 @@ on:
       - 'CMakeLists.txt'
       - 'rts/**'
       - 'doc/macos-gl41-*.md'
+      - 'macos-build-bar.sh'
 
 permissions:
   contents: read
@@ -69,6 +71,9 @@ jobs:
           sparse-checkout: |
             common
             modinfo.lua
+
+      - name: Validate one-command bootstrap syntax
+        run: bash -n macos-build-bar.sh
 
       - name: Restore compiler cache
         uses: actions/cache/restore@v5
