@@ -924,8 +924,13 @@ int SpringApp::Run()
 	// note: exceptions thrown by other threads are *not* caught here
 	// ErrorMsgBox sets threadError if called from any non-main thread
 	try {
-		if ((gu->globalQuit = !Init() || gu->globalQuit))
+		// Successful one-shot modes may deliberately request shutdown from Init
+		// after setting their own result code (for example --gl-smoke-test).
+		// Only an actual initialization failure is EXIT_CODE_NOINIT.
+		if (!Init()) {
+			gu->globalQuit = true;
 			spring::exitCode = spring::EXIT_CODE_NOINIT;
+		}
 
 		while (!gu->globalQuit) {
 			Watchdog::ClearTimer(WDT_MAIN);
