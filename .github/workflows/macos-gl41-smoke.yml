@@ -80,7 +80,7 @@ jobs:
             -DINSTALL_PORTABLE=ON \
             -DPREFER_STATIC_LIBS=OFF \
             -DNO_SOUND=ON \
-            -DENABLE_STREFLOP=OFF \
+            -DENABLE_STREFLOP=ON \
             -DAI_TYPES=NONE \
             -DBUILD_spring-dedicated=OFF \
             -DBUILD_spring-headless=OFF

@@ -32,10 +32,11 @@ host and not a Linux cross-compile. The job requests 4.1 Core explicitly and
 uploads the stdout log, `infolog.txt`, configuration, and CMake diagnostics
 even after a failure.
 
-The smoke build intentionally disables sound, multiplayer streflop, native
-AIs, and non-graphical engine variants. None of those are relevant to proving
-the macOS context/startup/render path, and keeping them out makes a diagnostic
-failure more specific. This build is not multiplayer-compatible.
+The smoke build intentionally disables sound, native AIs, and non-graphical
+engine variants. It keeps the ARM64/NEON streflop path enabled so the graphical
+binary is built with the normal synchronized-math integration. Passing this
+startup test is still not proof of replay or cross-architecture multiplayer
+determinism.
 
 ## Local run
 
@@ -55,7 +56,7 @@ cmake -S . -B build-macos-gl41 -G Ninja \
   -DINSTALL_PORTABLE=ON \
   -DPREFER_STATIC_LIBS=OFF \
   -DNO_SOUND=ON \
-  -DENABLE_STREFLOP=OFF \
+  -DENABLE_STREFLOP=ON \
   -DAI_TYPES=NONE \
   -DBUILD_spring-dedicated=OFF \
   -DBUILD_spring-headless=OFF
