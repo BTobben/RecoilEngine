@@ -6,6 +6,7 @@
 #include "Rendering/Shaders/GLSLCopyState.h"
 #include "Rendering/GL/myGL.h"
 #include "Rendering/GlobalRendering.h"
+#include "Rendering/GlobalRenderingInfo.h"
 
 #include "System/SafeUtil.h"
 #include "System/StringUtil.h"
@@ -496,9 +497,28 @@ namespace Shader {
 	bool GLSLProgramObject::Validate() {
 		RECOIL_DETAILED_TRACY_ZONE;
 		GLint validated = 0;
+		GLint previousVAO = 0;
+		GLuint validationVAO = 0;
+
+		// Core profiles require a VAO for program validation, even when the
+		// caller is only checking link/interface state and has not drawn yet.
+		if (globalRenderingInfo.glContextIsCore) {
+			glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &previousVAO);
+
+			if (previousVAO == 0) {
+				glGenVertexArrays(1, &validationVAO);
+				glBindVertexArray(validationVAO);
+			}
+		}
 
 		glValidateProgram(objID);
 		glGetProgramiv(objID, GL_VALIDATE_STATUS, &validated);
+
+		if (validationVAO != 0) {
+			glBindVertexArray(previousVAO);
+			glDeleteVertexArrays(1, &validationVAO);
+		}
+
 		valid = bool(validated);
 
 		// append the validation-log
