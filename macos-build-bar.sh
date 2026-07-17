@@ -190,8 +190,9 @@ prepare_bar_content() {
 }
 
 configure_and_build() {
-	local brew_prefix cmake_prefix pkg_path
+	local brew_prefix cmake_prefix openal_prefix pkg_path
 	brew_prefix="$(brew --prefix)"
+	openal_prefix="$(brew --prefix openal-soft)"
 	cmake_prefix="$brew_prefix;$(brew --prefix expat);$(brew --prefix openal-soft);$(brew --prefix libogg);$(brew --prefix libvorbis)"
 	pkg_path="$brew_prefix/lib/pkgconfig:$(brew --prefix expat)/lib/pkgconfig:$(brew --prefix libogg)/lib/pkgconfig:$(brew --prefix libvorbis)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 
@@ -202,6 +203,8 @@ configure_and_build() {
 			-DCMAKE_BUILD_TYPE=RELEASE \
 			-DCMAKE_INSTALL_PREFIX="$RUNTIME_ROOT" \
 			-DCMAKE_PREFIX_PATH="$cmake_prefix" \
+			-DOPENAL_INCLUDE_DIR="$openal_prefix/include/AL" \
+			-DOPENAL_LIBRARY="$openal_prefix/lib/libopenal.dylib" \
 			-DCMAKE_C_COMPILER_LAUNCHER=ccache \
 			-DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
 			-DMACOSX_BUNDLE=OFF \

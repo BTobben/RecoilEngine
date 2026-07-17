@@ -125,6 +125,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=RELEASE \
             -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/build/Beyond All Reason GL41.app/Contents/Resources/runtime" \
             -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH" \
+            -DOPENAL_INCLUDE_DIR=/opt/homebrew/opt/openal-soft/include/AL \
+            -DOPENAL_LIBRARY=/opt/homebrew/opt/openal-soft/lib/libopenal.dylib \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DMACOSX_BUNDLE=OFF \
