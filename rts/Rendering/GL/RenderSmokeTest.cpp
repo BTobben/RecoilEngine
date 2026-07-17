@@ -128,6 +128,47 @@ std::string FormatErrors(const std::vector<GLenum>& errors)
 	return stream.str();
 }
 
+bool ProbeLegacyAttribGroups(std::string& error)
+{
+	struct Group {
+		GLbitfield mask;
+		const char* name;
+	};
+
+	static constexpr std::array groups = {
+		Group{GL_COLOR_BUFFER_BIT, "GL_COLOR_BUFFER_BIT"},
+		Group{GL_DEPTH_BUFFER_BIT, "GL_DEPTH_BUFFER_BIT"},
+		Group{GL_ENABLE_BIT, "GL_ENABLE_BIT"},
+		Group{GL_POLYGON_BIT, "GL_POLYGON_BIT"},
+		Group{GL_SCISSOR_BIT, "GL_SCISSOR_BIT"},
+		Group{GL_STENCIL_BUFFER_BIT, "GL_STENCIL_BUFFER_BIT"},
+		Group{GL_TEXTURE_BIT, "GL_TEXTURE_BIT"},
+		Group{GL_VIEWPORT_BIT, "GL_VIEWPORT_BIT"},
+	};
+
+	for (const Group& group: groups) {
+		std::vector<GLenum> captureErrors;
+		{
+			GL::Legacy::ScopedAttrib attrib(group.mask);
+			captureErrors = DrainErrors();
+		}
+		const auto restoreErrors = DrainErrors();
+
+		if (!captureErrors.empty()) {
+			error = std::string("legacy capture for ") + group.name
+				+ " generated OpenGL errors: " + FormatErrors(captureErrors);
+			return false;
+		}
+		if (!restoreErrors.empty()) {
+			error = std::string("legacy restore for ") + group.name
+				+ " generated OpenGL errors: " + FormatErrors(restoreErrors);
+			return false;
+		}
+	}
+
+	return true;
+}
+
 std::string ShaderLog(const GLuint shader)
 {
 	GLint length = 0;
@@ -301,6 +342,10 @@ bool GL::RunStartupRenderSmokeTest(std::string& report)
 	const auto startupErrors = DrainErrors();
 	if (!startupErrors.empty()) {
 		report = "engine startup left OpenGL errors: " + FormatErrors(startupErrors);
+		LOG_L(L_ERROR, "[GLSmoke] FAIL %s", report.c_str());
+		return false;
+	}
+	if (!ProbeLegacyAttribGroups(report)) {
 		LOG_L(L_ERROR, "[GLSmoke] FAIL %s", report.c_str());
 		return false;
 	}
