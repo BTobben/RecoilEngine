@@ -59,7 +59,7 @@ jobs:
           submodules: recursive
 
       - name: Restore compiler cache
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: build/.ccache
           key: macos-gl41-ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}
@@ -154,6 +154,13 @@ jobs:
           if command -v ccache >/dev/null; then
             ccache --show-stats
           fi
+
+      - name: Save compiler cache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: build/.ccache
+          key: macos-gl41-ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}
 
       - name: Publish final smoke status
         if: always()
