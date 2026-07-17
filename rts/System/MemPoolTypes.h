@@ -9,6 +9,7 @@
 #include <cmath>
 #include <array>
 #include <deque>
+#include <functional>
 #include <vector>
 #include <map>
 #include <memory>
@@ -431,7 +432,8 @@ inline size_t StablePosAllocator<T>::Allocate(size_t numElems)
 	if (positionToSize.empty()) {
 		size_t returnPos = data.size();
 		data.resize(data.size() + numElems);
-		myLog("StablePosAllocator<T>::Allocate(%u) = %u [thread_id = %u]", uint32_t(numElems), uint32_t(returnPos), static_cast<uint32_t>(Threading::GetCurrentThreadId()));
+		const std::size_t threadId = std::hash<Threading::NativeThreadId>{}(Threading::GetCurrentThreadId());
+		myLog("StablePosAllocator<T>::Allocate(%u) = %u [thread_id = %zu]", uint32_t(numElems), uint32_t(returnPos), threadId);
 		return returnPos;
 	}
 
@@ -556,4 +558,3 @@ inline void StablePosAllocator<T>::Free(size_t firstElem, size_t numElems, const
 }
 
 #endif
-
