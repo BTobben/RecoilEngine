@@ -47,8 +47,13 @@ CONFIG(bool, DebugGL).defaultValue(false).description("Enables GL debug-context 
 CONFIG(bool, DebugGLStacktraces).defaultValue(false).description("Create a stacktrace when an OpenGL error occurs");
 CONFIG(bool, DebugGLReportGroups).defaultValue(false).description("Show OpenGL PUSH/POP groups in the GL debug");
 
+#if defined(__APPLE__)
+CONFIG(int, GLContextMajorVersion).defaultValue(4).minimumValue(3).maximumValue(4);
+CONFIG(int, GLContextMinorVersion).defaultValue(1).minimumValue(0).maximumValue(5);
+#else
 CONFIG(int, GLContextMajorVersion).defaultValue(3).minimumValue(3).maximumValue(4);
 CONFIG(int, GLContextMinorVersion).defaultValue(0).minimumValue(0).maximumValue(5);
+#endif
 CONFIG(int, MSAALevel).defaultValue(0).minimumValue(0).maximumValue(32).description("Enables multisample anti-aliasing; 'level' is the number of samples used.");
 CONFIG(float, MinSampleShadingRate).defaultValue(0.0f).minimumValue(0.0f).maximumValue(1.0f).description("A value of 1.0 indicates that each sample in the framebuffer should be independently shaded. A value of 0.0 effectively allows the GL to ignore sample rate shading. Any value between 0.0 and 1.0 allows the GL to shade only a subset of the total samples within each covered fragment.");
 
@@ -58,7 +63,11 @@ CONFIG(int, ForceDisableClipCtrl).defaultValue(0).minimumValue(0).maximumValue(1
 //CONFIG(int, ForceDisableShaders).defaultValue(0).minimumValue(0).maximumValue(1);
 CONFIG(int, ForceDisableGL4).defaultValue(0).safemodeValue(1).minimumValue(0).maximumValue(1);
 
+#if defined(__APPLE__)
+CONFIG(int, ForceCoreContext).defaultValue(1).minimumValue(0).maximumValue(1);
+#else
 CONFIG(int, ForceCoreContext).defaultValue(0).minimumValue(0).maximumValue(1);
+#endif
 CONFIG(int, ForceSwapBuffers).defaultValue(1).minimumValue(0).maximumValue(1);
 CONFIG(int, AtiHacks).defaultValue(-1).headlessValue(0).minimumValue(-1).maximumValue(1).description("Enables graphics drivers workarounds for users with AMD proprietary drivers.\n -1:=runtime detect, 0:=off, 1:=on");
 
@@ -91,6 +100,19 @@ CONFIG(bool, ForceDisableShaders).deprecated(true);
 
 
 #define WINDOWS_NO_INVISIBLE_GRIPS 1
+
+namespace {
+	constexpr bool IsContextVersionAtLeast(const int2& candidate, const int2& minimum)
+	{
+		return (candidate.x * 10 + candidate.y) >= (minimum.x * 10 + minimum.y);
+	}
+
+#if defined(__APPLE__)
+	constexpr bool PLATFORM_REQUIRES_CORE_CONTEXT = true;
+#else
+	constexpr bool PLATFORM_REQUIRES_CORE_CONTEXT = false;
+#endif
+}
 
 /**
  * @brief global rendering
@@ -194,6 +216,12 @@ CR_REG_METADATA(CGlobalRendering, (
 	CR_IGNORED(supportClipSpaceControl),
 	CR_IGNORED(supportSeamlessCubeMaps),
 	CR_IGNORED(supportFragDepthLayout),
+	CR_IGNORED(supportGL41Core),
+	CR_IGNORED(supportComputeShaders),
+	CR_IGNORED(supportShaderStorageBuffers),
+	CR_IGNORED(supportImageLoadStore),
+	CR_IGNORED(supportAtomicCounterBuffers),
+	CR_IGNORED(supportMultiDrawIndirect),
 	CR_IGNORED(haveGL4),
 	CR_IGNORED(glslMaxVaryings),
 	CR_IGNORED(glslMaxAttributes),
@@ -324,6 +352,12 @@ CGlobalRendering::CGlobalRendering()
 	, supportClipSpaceControl(false)
 	, supportSeamlessCubeMaps(false)
 	, supportFragDepthLayout(false)
+	, supportGL41Core(false)
+	, supportComputeShaders(false)
+	, supportShaderStorageBuffers(false)
+	, supportImageLoadStore(false)
+	, supportAtomicCounterBuffers(false)
+	, supportMultiDrawIndirect(false)
 	, haveGL4(false)
 
 	, glslMaxVaryings(0)
@@ -464,7 +498,21 @@ SDL_GLContext CGlobalRendering::CreateGLContext(const int2& minCtx)
 	SDL_GLContext newContext = nullptr;
 
 	constexpr int2 glCtxs[] = {{2, 0}, {2, 1},  {3, 0}, {3, 1}, {3, 2}, {3, 3},  {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}, {4, 5}, {4, 6}};
-	          int2 cmpCtx;
+	const bool requireCoreContext = PLATFORM_REQUIRES_CORE_CONTEXT;
+	const int preferredProfile = (forceCoreContext || requireCoreContext)
+		? SDL_GL_CONTEXT_PROFILE_CORE
+		: SDL_GL_CONTEXT_PROFILE_COMPATIBILITY;
+	const int alternateProfile = (preferredProfile == SDL_GL_CONTEXT_PROFILE_CORE)
+		? SDL_GL_CONTEXT_PROFILE_COMPATIBILITY
+		: SDL_GL_CONTEXT_PROFILE_CORE;
+
+	struct ContextCandidate {
+		int2 version = {0, 0};
+		int profile = 0;
+	};
+
+	ContextCandidate preferredFallback;
+	ContextCandidate alternateFallback;
 
 	if (std::find(&glCtxs[0], &glCtxs[0] + (sizeof(glCtxs) / sizeof(int2)), minCtx) == (&glCtxs[0] + (sizeof(glCtxs) / sizeof(int2)))) {
 		handleerror(nullptr, "illegal OpenGL context-version specified, aborting", "ERROR", MBF_OK | MBF_EXCL);
@@ -478,38 +526,50 @@ SDL_GLContext CGlobalRendering::CreateGLContext(const int2& minCtx)
 	const char* profs[] = {"compatibility", "core"};
 
 	char buf[1024] = {0};
-	SNPRINTF(buf, sizeof(buf), frmts[false], __func__, SDL_GetError(), minCtx.x, minCtx.y, profs[forceCoreContext]);
+	SNPRINTF(buf, sizeof(buf), frmts[false], __func__, SDL_GetError(), minCtx.x, minCtx.y, profs[preferredProfile == SDL_GL_CONTEXT_PROFILE_CORE]);
 
 	for (const int2 tmpCtx: glCtxs) {
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, tmpCtx.x);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, tmpCtx.y);
 
-		for (uint32_t mask: {SDL_GL_CONTEXT_PROFILE_CORE, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY}) {
+		for (const int mask: {preferredProfile, alternateProfile}) {
+			if (requireCoreContext && mask != SDL_GL_CONTEXT_PROFILE_CORE)
+				continue;
+
 			SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, mask);
 
 			if ((newContext = SDL_GL_CreateContext(sdlWindow)) == nullptr) {
 				LOG_L(L_WARNING, frmts[false], __func__, SDL_GetError(), tmpCtx.x, tmpCtx.y, profs[mask == SDL_GL_CONTEXT_PROFILE_CORE]);
 			} else {
-				// save the lowest successfully created fallback compatibility-context
-				if (mask == SDL_GL_CONTEXT_PROFILE_COMPATIBILITY && cmpCtx.x == 0 && tmpCtx.x >= minCtx.x)
-					cmpCtx = tmpCtx;
+				ContextCandidate& fallback = (mask == preferredProfile) ? preferredFallback : alternateFallback;
+
+				// glCtxs is ordered, so the first acceptable context is the
+				// lowest successful one for this profile.
+				if (fallback.version.x == 0 && IsContextVersionAtLeast(tmpCtx, minCtx))
+					fallback = {tmpCtx, mask};
 
 				LOG_L(L_WARNING, frmts[true], __func__, tmpCtx.x, tmpCtx.y, profs[mask == SDL_GL_CONTEXT_PROFILE_CORE]);
 			}
 
-			// accepts nullptr's
-			SDL_GL_DeleteContext(newContext);
+			if (newContext != nullptr) {
+				SDL_GL_DeleteContext(newContext);
+				newContext = nullptr;
+			}
 		}
 	}
 
-	if (cmpCtx.x == 0) {
+	const ContextCandidate& fallback = (preferredFallback.version.x != 0)
+		? preferredFallback
+		: alternateFallback;
+
+	if (fallback.version.x == 0) {
 		handleerror(nullptr, buf, "ERROR", MBF_OK | MBF_EXCL);
 		return nullptr;
 	}
 
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, cmpCtx.x);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, cmpCtx.y);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, fallback.version.x);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, fallback.version.y);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, fallback.profile);
 
 	// should never fail at this point
 	return (newContext = SDL_GL_CreateContext(sdlWindow));
@@ -551,7 +611,8 @@ bool CGlobalRendering::CreateWindowAndContext(const char* title)
 	//   3.0/1.30 for Mesa, other drivers return their *maximum* supported context
 	//   in compat and do not make 3.0 itself available in core (though this still
 	//   suffices for most of Spring)
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, forceCoreContext? SDL_GL_CONTEXT_PROFILE_CORE: SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+	const bool useCoreContext = forceCoreContext || PLATFORM_REQUIRES_CORE_CONTEXT;
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, useCoreContext ? SDL_GL_CONTEXT_PROFILE_CORE : SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
 
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, minCtx.x);
@@ -874,11 +935,36 @@ void CGlobalRendering::SetGLSupportFlags()
 		globalRenderingInfo.glslVersionNum = glslVerNum.x * 100 + glslVerNum.y;
 	}
 
-	haveGL4 = static_cast<bool>(GLAD_GL_ARB_multi_draw_indirect);
+	const bool allowGL43Features = !forceDisableGL4;
+
+	supportGL41Core = globalRenderingInfo.glContextIsCore;
+	supportGL41Core &= IsContextVersionAtLeast(globalRenderingInfo.glContextVersion, {4, 1});
+
+	supportComputeShaders = allowGL43Features;
+	supportComputeShaders &= static_cast<bool>(GLAD_GL_VERSION_4_3 || GLAD_GL_ARB_compute_shader);
+	supportComputeShaders &= IS_GL_FUNCTION_AVAILABLE(glDispatchCompute);
+
+	supportShaderStorageBuffers = allowGL43Features;
+	supportShaderStorageBuffers &= static_cast<bool>(GLAD_GL_VERSION_4_3 || GLAD_GL_ARB_shader_storage_buffer_object);
+	supportShaderStorageBuffers &= IS_GL_FUNCTION_AVAILABLE(glShaderStorageBlockBinding);
+
+	supportImageLoadStore = allowGL43Features;
+	supportImageLoadStore &= static_cast<bool>(GLAD_GL_VERSION_4_2 || GLAD_GL_ARB_shader_image_load_store);
+	supportImageLoadStore &= IS_GL_FUNCTION_AVAILABLE(glBindImageTexture);
+	supportImageLoadStore &= IS_GL_FUNCTION_AVAILABLE(glMemoryBarrier);
+
+	supportAtomicCounterBuffers = allowGL43Features;
+	supportAtomicCounterBuffers &= static_cast<bool>(GLAD_GL_VERSION_4_2 || GLAD_GL_ARB_shader_atomic_counters);
+	supportAtomicCounterBuffers &= IS_GL_FUNCTION_AVAILABLE(glGetActiveAtomicCounterBufferiv);
+
+	supportMultiDrawIndirect = allowGL43Features;
+	supportMultiDrawIndirect &= static_cast<bool>(GLAD_GL_VERSION_4_3 || GLAD_GL_ARB_multi_draw_indirect);
+	supportMultiDrawIndirect &= IS_GL_FUNCTION_AVAILABLE(glMultiDrawElementsIndirect);
+
+	haveGL4 = supportMultiDrawIndirect;
 	haveGL4 &= static_cast<bool>(GLAD_GL_ARB_uniform_buffer_object);
-	haveGL4 &= static_cast<bool>(GLAD_GL_ARB_shader_storage_buffer_object);
+	haveGL4 &= supportShaderStorageBuffers;
 	haveGL4 &= CheckShaderGL4();
-	haveGL4 &= !forceDisableGL4;
 
 	{
 		// use some ATI bugfixes?
@@ -950,7 +1036,7 @@ void CGlobalRendering::QueryGLMaxVals()
 		glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE,      &glslMaxUniformBufferSize);
 	}
 
-	if (GLAD_GL_ARB_shader_storage_buffer_object) {
+	if (supportShaderStorageBuffers) {
 		glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &glslMaxStorageBufferBindings);
 		glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE,      &glslMaxStorageBufferSize);
 	}
@@ -1026,6 +1112,12 @@ void CGlobalRendering::LogVersionInfo(const char* sdlVersionStr, const char* glV
 	LOG("\t");
 	LOG("\tInitialized OpenGL Context: %i.%i (%s)", globalRenderingInfo.glContextVersion.x, globalRenderingInfo.glContextVersion.y, globalRenderingInfo.glContextIsCore ? "Core" : "Compat");
 	LOG("\tGLSL shader support       : %i", true);
+	LOG("\tGL 4.1 Core context       : %i", supportGL41Core);
+	LOG("\tcompute shader support    : %i", supportComputeShaders);
+	LOG("\tshader storage support    : %i", supportShaderStorageBuffers);
+	LOG("\timage load/store support  : %i", supportImageLoadStore);
+	LOG("\tatomic counter support    : %i", supportAtomicCounterBuffers);
+	LOG("\tmulti-draw indirect       : %i", supportMultiDrawIndirect);
 	LOG("\tGL4 support               : %i", haveGL4);
 	LOG("\tFBO extension support     : %i", FBO::IsSupported());
 	LOG("\tNVX GPU mem-info support  : %i", IsExtensionSupported("GL_NVX_gpu_memory_info"));
@@ -1744,6 +1836,9 @@ void CGlobalRendering::ToggleMultisampling() const
 bool CGlobalRendering::CheckShaderGL4() const
 {
 #ifndef HEADLESS
+	if (!supportShaderStorageBuffers)
+		return false;
+
 	//the code below doesn't make any sense, but here only to test if the shader can be compiled
 	constexpr static const char* vsSrc = R"(
 #version 430 core

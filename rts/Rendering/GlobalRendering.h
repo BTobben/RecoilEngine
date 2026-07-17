@@ -1,7 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
-#ifndef _GLOBAL_RENDERING_H
-#define _GLOBAL_RENDERING_H
+#pragma once
 
 #include <string>
 #include <memory>
@@ -331,7 +330,18 @@ public:
 	bool supportFragDepthLayout;
 
 	/**
-	 * Shader capabilities
+	 * OpenGL feature capabilities. These are kept separate from haveGL4 so
+	 * callers can degrade individual features on OpenGL 4.1 contexts.
+	 */
+	bool supportGL41Core;
+	bool supportComputeShaders;
+	bool supportShaderStorageBuffers;
+	bool supportImageLoadStore;
+	bool supportAtomicCounterBuffers;
+	bool supportMultiDrawIndirect;
+
+	/**
+	 * Complete enhanced model-renderer capability (legacy name/API).
 	 */
 	bool haveGL4;
 
@@ -423,6 +433,4 @@ private:
 };
 
 extern CGlobalRendering* globalRendering;
-
-#endif /* _GLOBAL_RENDERING_H */
 

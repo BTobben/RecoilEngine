@@ -111,6 +111,18 @@ bool LuaConstPlatform::PushEntries(lua_State* L)
 	LuaPushNamedBool(L, "glHaveGLSL", true);
 	/*** @field Platform.glHaveGL4 boolean */
 	LuaPushNamedBool(L, "glHaveGL4", globalRendering->haveGL4);
+	/*** @field Platform.glSupportGL41Core boolean */
+	LuaPushNamedBool(L, "glSupportGL41Core", globalRendering->supportGL41Core);
+	/*** @field Platform.glSupportComputeShaders boolean */
+	LuaPushNamedBool(L, "glSupportComputeShaders", globalRendering->supportComputeShaders);
+	/*** @field Platform.glSupportShaderStorageBuffers boolean */
+	LuaPushNamedBool(L, "glSupportShaderStorageBuffers", globalRendering->supportShaderStorageBuffers);
+	/*** @field Platform.glSupportImageLoadStore boolean */
+	LuaPushNamedBool(L, "glSupportImageLoadStore", globalRendering->supportImageLoadStore);
+	/*** @field Platform.glSupportAtomicCounterBuffers boolean */
+	LuaPushNamedBool(L, "glSupportAtomicCounterBuffers", globalRendering->supportAtomicCounterBuffers);
+	/*** @field Platform.glSupportMultiDrawIndirect boolean */
+	LuaPushNamedBool(L, "glSupportMultiDrawIndirect", globalRendering->supportMultiDrawIndirect);
 
 	/*** @field Platform.glSupportDepthBufferBitDepth number */
 	LuaPushNamedNumber(L, "glSupportDepthBufferBitDepth", globalRendering->supportDepthBufferBitDepth);
