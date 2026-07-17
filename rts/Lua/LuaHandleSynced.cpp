@@ -55,7 +55,6 @@
 
 #include "System/Misc/TracyDefs.h"
 
-#include <ranges>
 
 LuaRulesParams::Params  CSplitLuaHandle::gameParams;
 
@@ -1220,8 +1219,8 @@ bool CSyncedLuaHandle::ResourceExcess(const std::map <int, SResourcePack>& exces
 
 	for (const auto &[teamID, excess] : excesses) {
 		lua_createtable(L, excess.MAX_RESOURCES, 0);
-		for (const auto &[resourceID, resource] : std::views::enumerate(excess)) {
-			lua_pushnumber(L, resource);
+		for (int resourceID = 0; resourceID < SResourcePack::MAX_RESOURCES; ++resourceID) {
+			lua_pushnumber(L, excess[resourceID]);
 			lua_rawseti(L, -2, resourceID + 1);
 		}
 		lua_rawseti(L, -2, teamID);
