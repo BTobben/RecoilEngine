@@ -60,8 +60,6 @@ LuaVAOImpl::~LuaVAOImpl()
 bool LuaVAOImpl::Supported()
 {
 	return (
-		globalRendering != nullptr &&
-		globalRendering->supportMultiDrawIndirect &&
 		VBO::IsSupported(GL_ARRAY_BUFFER) &&
 		VAO::IsSupported() &&
 		GLAD_GL_ARB_instanced_arrays &&
@@ -399,10 +397,13 @@ void LuaVAOImpl::DrawArrays(GLenum mode, sol::optional<int> vertCountOpt, sol::o
 	if (result.instCount == 0)
 		glDrawArrays(mode, result.baseIndex, result.drawCount);
 	else {
-		if (result.baseInstance > 0)
+		if (result.baseInstance > 0) {
+			if (!IS_GL_FUNCTION_AVAILABLE(glDrawArraysInstancedBaseInstance))
+				LuaUtils::SolLuaError("[LuaVAOImpl::%s]: base-instance drawing requires OpenGL 4.2 or GL_ARB_base_instance", __func__);
 			glDrawArraysInstancedBaseInstance(mode, result.baseIndex, result.drawCount, result.instCount, result.baseInstance);
-		else
+		} else {
 			glDrawArraysInstanced(mode, result.baseIndex, result.drawCount, result.instCount);
+		}
 	}
 
 	vao->Unbind();
@@ -448,9 +449,11 @@ void LuaVAOImpl::DrawElements(GLenum mode, sol::optional<int> indCountOpt, sol::
 		else
 			glDrawElementsBaseVertex(mode, result.drawCount, indexType, INT2PTR(indElemOffsetInBytes), result.baseVertex);
 	} else {
-		if (result.baseInstance > 0)
+		if (result.baseInstance > 0) {
+			if (!IS_GL_FUNCTION_AVAILABLE(glDrawElementsInstancedBaseVertexBaseInstance))
+				LuaUtils::SolLuaError("[LuaVAOImpl::%s]: base-instance drawing requires OpenGL 4.2 or GL_ARB_base_instance", __func__);
 			glDrawElementsInstancedBaseVertexBaseInstance(mode, result.drawCount, indexType, INT2PTR(indElemOffsetInBytes), result.instCount, result.baseVertex, result.baseInstance);
-		else {
+		} else {
 			if (result.baseVertex == 0)
 				glDrawElementsInstanced(mode, result.drawCount, indexType, INT2PTR(indElemOffsetInBytes), result.instCount);
 			else
@@ -541,6 +544,9 @@ void LuaVAOImpl::RemoveFromSubmission(int idx)
  */
 void LuaVAOImpl::Submit()
 {
+	if (globalRendering == nullptr || !globalRendering->supportMultiDrawIndirect)
+		LuaUtils::SolLuaError("[LuaVAOImpl::%s]: submission drawing requires OpenGL 4.3 or GL_ARB_multi_draw_indirect", __func__);
+
 	glEnable(GL_PRIMITIVE_RESTART);
 	glPrimitiveRestartIndex(indxLuaVBO->primitiveRestartIndex);
 

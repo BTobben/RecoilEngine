@@ -43,6 +43,12 @@ VBO range alignment no longer queries SSBO-only state on an unsupported
 context. Lua VBO clearing also has a mapped-buffer fallback when
 `glClearBufferData` is unavailable.
 
+The baseline Lua VAO API remains available without multi-draw indirect, which
+allows ordinary and instanced draws on OpenGL 4.1. `VAO:Submit()` reports
+multi-draw indirect as unavailable, and draw requests with a non-zero base
+instance report the missing OpenGL 4.2 capability instead of calling a null
+entry point.
+
 ## Known limitations
 
 This foundation does **not** yet make the graphical engine playable on macOS.
