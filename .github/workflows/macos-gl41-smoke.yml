@@ -34,6 +34,9 @@ jobs:
       HOMEBREW_NO_AUTO_UPDATE: '1'
       HOMEBREW_NO_INSTALL_CLEANUP: '1'
       HOMEBREW_PREFIX: /opt/homebrew
+      CCACHE_DIR: ${{ github.workspace }}/build/.ccache
+      CCACHE_MAXSIZE: 750M
+      CCACHE_COMPRESS: '1'
 
     steps:
       - name: Publish pending smoke status
@@ -55,9 +58,18 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Restore compiler cache
+        uses: actions/cache@v5
+        with:
+          path: build/.ccache
+          key: macos-gl41-ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}
+          restore-keys: |
+            macos-gl41-ccache-v1-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Install native build dependencies
         run: >-
           brew install
+          ccache
           cmake
           ninja
           pkgconf
@@ -76,6 +88,8 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=RELEASE \
             -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH" \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DMACOSX_BUNDLE=OFF \
             -DINSTALL_PORTABLE=ON \
             -DPREFER_STATIC_LIBS=OFF \
@@ -133,6 +147,13 @@ jobs:
             build/smoke-write/infolog.txt
             build/CMakeCache.txt
             build/CMakeFiles/CMakeConfigureLog.yaml
+
+      - name: Report compiler cache statistics
+        if: always()
+        run: |
+          if command -v ccache >/dev/null; then
+            ccache --show-stats
+          fi
 
       - name: Publish final smoke status
         if: always()
