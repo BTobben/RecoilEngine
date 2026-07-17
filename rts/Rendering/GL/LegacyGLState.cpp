@@ -320,7 +320,27 @@ void RestoreColorBuffer(const ColorBufferState& state)
 	SetCapability(GL_COLOR_LOGIC_OP, state.logicOpEnabled);
 	SetCapability(GL_FRAMEBUFFER_SRGB, state.framebufferSRGBEnabled);
 	glLogicOp(state.logicOpMode);
-	glDrawBuffers(static_cast<GLsizei>(drawBuffers.size()), drawBuffers.data());
+
+	// GL_DRAW_BUFFER0 can report one of the default-framebuffer aliases even
+	// though glDrawBuffers does not accept those aliases in its buffer array.
+	// In particular, a double-buffered macOS Core context reports GL_BACK and
+	// turns glDrawBuffers(MAX_DRAW_BUFFERS, {GL_BACK, GL_NONE, ...}) into
+	// GL_INVALID_ENUM.  glDrawBuffer is the matching API for restoring these
+	// single-selection aliases and also resets all higher draw slots to NONE.
+	if (!drawBuffers.empty()) {
+		switch (drawBuffers.front()) {
+			case GL_FRONT:
+			case GL_BACK:
+			case GL_LEFT:
+			case GL_RIGHT:
+			case GL_FRONT_AND_BACK: {
+				glDrawBuffer(drawBuffers.front());
+			} break;
+			default: {
+				glDrawBuffers(static_cast<GLsizei>(drawBuffers.size()), drawBuffers.data());
+			} break;
+		}
+	}
 	glReadBuffer(state.readBuffer);
 }
 
