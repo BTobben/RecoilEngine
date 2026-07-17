@@ -122,7 +122,7 @@ jobs:
 
       - name: Run real engine startup and render smoke
         env:
-          SPRING_DATADIR: ${{ github.workspace }}/build
+          SPRING_DATADIR: '${{ github.workspace }}/build:${{ github.workspace }}/cont'
         run: |
           set -o pipefail
           ./build/spring \
