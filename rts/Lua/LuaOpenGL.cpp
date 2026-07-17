@@ -363,7 +363,8 @@ bool LuaOpenGL::PushEntries(lua_State* L)
 	REGISTER_LUA_CFUNC(MultiTexEnv);
 	REGISTER_LUA_CFUNC(TexGen);
 	REGISTER_LUA_CFUNC(MultiTexGen);
-	REGISTER_LUA_CFUNC(BindImageTexture);
+	if (globalRendering->supportImageLoadStore)
+		REGISTER_LUA_CFUNC(BindImageTexture);
 	REGISTER_LUA_CFUNC(CreateTextureAtlas);
 	REGISTER_LUA_CFUNC(FinalizeTextureAtlas);
 	REGISTER_LUA_CFUNC(DeleteTextureAtlas);
@@ -385,8 +386,16 @@ bool LuaOpenGL::PushEntries(lua_State* L)
 	REGISTER_LUA_CFUNC(Rect);
 	REGISTER_LUA_CFUNC(TexRect);
 
-	REGISTER_LUA_CFUNC(DispatchCompute);
-	REGISTER_LUA_CFUNC(MemoryBarrier);
+	if (globalRendering->supportComputeShaders)
+		REGISTER_LUA_CFUNC(DispatchCompute);
+	if (IS_GL_FUNCTION_AVAILABLE(glMemoryBarrier) && (
+		globalRendering->supportComputeShaders ||
+		globalRendering->supportShaderStorageBuffers ||
+		globalRendering->supportImageLoadStore ||
+		globalRendering->supportAtomicCounterBuffers
+	)) {
+		REGISTER_LUA_CFUNC(MemoryBarrier);
+	}
 
 	REGISTER_LUA_CFUNC(BeginText);
 	REGISTER_LUA_CFUNC(Text);
@@ -2908,6 +2917,9 @@ int LuaOpenGL::TexRect(lua_State* L)
  */
 int LuaOpenGL::DispatchCompute(lua_State* L)
 {
+	if (!globalRendering->supportComputeShaders)
+		return luaL_error(L, "%s(): compute shaders require OpenGL 4.3 or GL_ARB_compute_shader", __func__);
+
 	const GLuint numGroupX = (GLuint)luaL_checknumber(L, 1);
 	const GLuint numGroupY = (GLuint)luaL_checknumber(L, 2);
 	const GLuint numGroupZ = (GLuint)luaL_checknumber(L, 3);
@@ -2932,6 +2944,9 @@ int LuaOpenGL::DispatchCompute(lua_State* L)
 	GLbitfield barriers = (GLbitfield)luaL_optint(L, 4, 0);
 	//skip checking the correctness of values :)
 
+	if (barriers > 0u && !IS_GL_FUNCTION_AVAILABLE(glMemoryBarrier))
+		return luaL_error(L, "%s(): memory barriers are unavailable on this OpenGL context", __func__);
+
 	if (barriers > 0u)
 		glMemoryBarrier(barriers);
 
@@ -2944,6 +2959,9 @@ int LuaOpenGL::DispatchCompute(lua_State* L)
  */
 int LuaOpenGL::MemoryBarrier(lua_State* L)
 {
+	if (!IS_GL_FUNCTION_AVAILABLE(glMemoryBarrier))
+		return luaL_error(L, "%s(): memory barriers require OpenGL 4.2 or a supporting extension", __func__);
+
 	GLbitfield barriers = (GLbitfield)luaL_optint(L, 1, 0);
 	//skip checking the correctness of values :)
 
@@ -4758,6 +4776,9 @@ int LuaOpenGL::MultiTexGen(lua_State* L)
  */
 int LuaOpenGL::BindImageTexture(lua_State* L)
 {
+	if (!globalRendering->supportImageLoadStore)
+		return luaL_error(L, "%s(): image load/store requires OpenGL 4.2 or GL_ARB_shader_image_load_store", __func__);
+
 	CheckDrawingEnabled(L, __func__);
 
 	int argNum = 1;

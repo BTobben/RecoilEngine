@@ -201,6 +201,11 @@ bool LoadFromLua(Shader::IProgramObject* program, const std::string& filename)
 	ParseShaderTable(&root, "fragment", fragSrcs);
 	ParseShaderTable(&root, "compute",  compSrcs);
 
+	if (!compSrcs.str().empty() && !globalRendering->supportComputeShaders) {
+		LOG_L(L_ERROR, "Failed to load Lua shader \"%s\": compute shaders are unavailable on this OpenGL context", filename.c_str());
+		return false;
+	}
+
 	if (vertSrcs.str().empty() && fragSrcs.str().empty() && geomSrcs.str().empty())
 		return false;
 

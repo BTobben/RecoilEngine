@@ -6,6 +6,7 @@
  */
 
 #include <cassert>
+#include <algorithm>
 #include <vector>
 #include <stdint.h>
 
@@ -43,7 +44,6 @@ bool VBO::IsSupported(GLenum target) {
 	static bool isPBOSupported  = (GLAD_GL_EXT_pixel_buffer_object);
 	static bool isVBOSupported  = (GLAD_GL_ARB_vertex_buffer_object);
 	static bool isUBOSupported  = (GLAD_GL_ARB_uniform_buffer_object);
-	static bool isSSBOSupported = (GLAD_GL_ARB_shader_storage_buffer_object);
 	static bool isCopyBuffSupported = (GLAD_GL_ARB_copy_buffer);
 
 	switch (target) {
@@ -56,7 +56,7 @@ bool VBO::IsSupported(GLenum target) {
 	case GL_UNIFORM_BUFFER:
 		return isUBOSupported;
 	case GL_SHADER_STORAGE_BUFFER:
-		return isSSBOSupported;
+		return globalRendering != nullptr && globalRendering->supportShaderStorageBuffers;
 	case GL_COPY_WRITE_BUFFER:
 	case GL_COPY_READ_BUFFER:
 		return isCopyBuffSupported;
@@ -177,6 +177,10 @@ bool VBO::BindBufferRangeImpl(GLenum target, GLuint index, GLuint _vboId, GLuint
 		return false;
 	}
 
+	if (target == GL_SHADER_STORAGE_BUFFER && !globalRendering->supportShaderStorageBuffers) {
+		LOG_L(L_ERROR, "[VBO::%s]: attempt to bind an SSBO on a context without shader-storage support", __func__);
+		return false;
+	}
 	if (target == GL_SHADER_STORAGE_BUFFER && index >= globalRendering->glslMaxStorageBufferBindings) {
 		LOG_L(L_ERROR, "[VBO::%s]: attempt to bind SSBO with invalid index [%u]", __func__, index);
 		return false;
@@ -554,26 +558,29 @@ size_t VBO::GetAlignedSize(GLenum target, size_t sz)
 size_t VBO::GetOffsetAlignment(GLenum target) {
 	RECOIL_DETAILED_TRACY_ZONE;
 
-	const auto getOffsetAlignmentUBO = []() -> size_t {
-		GLint buffAlignment = 0;
-		glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &buffAlignment);
-		return static_cast<size_t>(buffAlignment);
-	};
-
-	const auto getOffsetAlignmentSSBO = []() -> size_t {
-		GLint buffAlignment = 0;
-		glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &buffAlignment);
-		return static_cast<size_t>(buffAlignment);
-	};
-
-	static size_t offsetAlignmentUBO  = getOffsetAlignmentUBO();
-	static size_t offsetAlignmentSSBO = getOffsetAlignmentSSBO();
-
 	switch (target) {
-	case GL_UNIFORM_BUFFER:
+	case GL_UNIFORM_BUFFER: {
+		static const size_t offsetAlignmentUBO = []() -> size_t {
+			if (!GLAD_GL_ARB_uniform_buffer_object)
+				return 1;
+
+			GLint buffAlignment = 1;
+			glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &buffAlignment);
+			return static_cast<size_t>(std::max(buffAlignment, 1));
+		}();
 		return offsetAlignmentUBO;
-	case GL_SHADER_STORAGE_BUFFER:
+	}
+	case GL_SHADER_STORAGE_BUFFER: {
+		if (globalRendering == nullptr || !globalRendering->supportShaderStorageBuffers)
+			return 1;
+
+		static const size_t offsetAlignmentSSBO = []() -> size_t {
+			GLint buffAlignment = 1;
+			glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &buffAlignment);
+			return static_cast<size_t>(std::max(buffAlignment, 1));
+		}();
 		return offsetAlignmentSSBO;
+	}
 	case GL_PIXEL_PACK_BUFFER:
 	case GL_PIXEL_UNPACK_BUFFER:
 	case GL_ARRAY_BUFFER:
@@ -582,4 +589,3 @@ size_t VBO::GetOffsetAlignment(GLenum target) {
 		return 1;
 	}
 }
-

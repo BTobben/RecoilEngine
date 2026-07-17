@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 #include <algorithm>
+#include <cstring>
 #include <sstream>
 
 #include "lib/sol2/sol.hpp"
@@ -778,9 +779,16 @@ void LuaVBOImpl::Clear()
 {
 	VBOExistenceCheck(vbo, __func__);
 
-	GLubyte val = 0;
 	vbo->Bind();
-	glClearBufferData(defTarget, GL_R8UI, GL_RED_INTEGER, GL_UNSIGNED_BYTE, &val);
+	if (GLAD_GL_VERSION_4_3 || GLAD_GL_ARB_clear_buffer_object) {
+		const GLubyte val = 0;
+		glClearBufferData(defTarget, GL_R8UI, GL_RED_INTEGER, GL_UNSIGNED_BYTE, &val);
+	} else {
+		GLubyte* mappedBuffer = vbo->MapBuffer(GL_WRITE_ONLY);
+		if (mappedBuffer != nullptr)
+			std::memset(mappedBuffer, 0, vbo->GetSize());
+		vbo->UnmapBuffer();
+	}
 	vbo->Unbind();
 }
 
@@ -1385,6 +1393,9 @@ int LuaVBOImpl::BindBufferRangeImpl(GLuint bindingIndex,  const sol::optional<in
 	GLenum target = targetOpt.value_or(defTarget);
 	if (target != GL_UNIFORM_BUFFER && target != GL_SHADER_STORAGE_BUFFER) {
 		LuaUtils::SolLuaError("[LuaVBOImpl::%s] (Un)binding target can only be equal to [%u] or [%u]", __func__, GL_UNIFORM_BUFFER, GL_SHADER_STORAGE_BUFFER);
+	}
+	if (target == GL_SHADER_STORAGE_BUFFER && !globalRendering->supportShaderStorageBuffers) {
+		LuaUtils::SolLuaError("[LuaVBOImpl::%s] Shader-storage buffers are unavailable on this OpenGL context", __func__);
 	}
 	defTarget = target;
 

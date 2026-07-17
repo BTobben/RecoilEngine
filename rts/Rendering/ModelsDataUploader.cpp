@@ -119,7 +119,7 @@ namespace Impl {
 	>
 	void InitCommon(std::unique_ptr<SSBO>& ssbo, MemStorage& memStorage, uint32_t bindingIdx, uint32_t elemCount0, uint32_t elemCountIncr, IStreamBufferConcept::Types type, bool coherent, uint32_t numBuffers, const char* className)
 	{
-		if (!globalRendering->haveGL4)
+		if (!globalRendering->haveGL4 || !globalRendering->supportShaderStorageBuffers)
 			return;
 
 		assert(bindingIdx < -1u);
@@ -160,7 +160,7 @@ namespace Impl {
 	template<typename SSBO>
 	void KillCommon(std::unique_ptr<SSBO>& ssbo, uint32_t bindingIdx)
 	{
-		if (!globalRendering->haveGL4)
+		if (!ssbo)
 			return;
 
 		ssbo->UnbindBufferRange(bindingIdx);
@@ -328,7 +328,7 @@ size_t TransformsUploader::GetProjectileElemOffset(int32_t syncedProjectileID) c
 
 void ModelUniformsUploader::Init()
 {
-	if (!globalRendering->haveGL4)
+	if (!globalRendering->haveGL4 || !globalRendering->supportShaderStorageBuffers)
 		return;
 
 	Impl::InitCommon<MyDataType>(

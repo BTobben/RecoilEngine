@@ -2,6 +2,7 @@
 
 #include "GLSLCopyState.h"
 #include "Shader.h"
+#include "Rendering/GlobalRendering.h"
 #include "Rendering/GL/myGL.h"
 #include "System/Log/ILog.h"
 #include "System/StringUtil.h"
@@ -274,10 +275,8 @@ static void CopyShaderState_Uniforms(GLuint newProgID, GLuint oldProgID, Shader:
 			HANDLE_MATTYPE(FLOAT_MAT, 4, fv, GLfloat)
 
 			case ATOMIC: {
-				assert(false);
-				/*GLint binding;
-				glGetActiveAtomicCounterBufferiv(oldProgID, i, GL_ATOMIC_COUNTER_BUFFER_BINDING, &binding);
-				glUniform1f(newLoc, 1, binding);*/
+				if (globalRendering->supportAtomicCounterBuffers)
+					LOG_L(L_DEBUG, "Atomic-counter uniform \"%s\" keeps its shader-declared buffer binding", name);
 			} break;
 
 			default:
@@ -327,7 +326,7 @@ static void CopyShaderState_UniformBlocks(GLuint newProgID, GLuint oldProgID)
 static void CopyShaderState_ShaderStorage(GLuint newProgID, GLuint oldProgID)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	if (!GLAD_GL_ARB_program_interface_query)
+	if (!globalRendering->supportShaderStorageBuffers || !GLAD_GL_ARB_program_interface_query)
 		return;
 
 	GLint numUniformBlocks, maxNameLength = 0;

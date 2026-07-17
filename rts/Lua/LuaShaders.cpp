@@ -663,6 +663,9 @@ int LuaShaders::CreateShader(lua_State* L)
 	const bool graphicSrcEmpty = vertSrcs.empty() && fragSrcs.empty() && geomSrcs.empty() && tcsSrcs.empty() && tesSrcs.empty();
 	const bool computeSrcEmpty = compSrcs.empty();
 
+	if (!computeSrcEmpty && !globalRendering->supportComputeShaders)
+		return luaL_error(L, "%s(): compute shaders require OpenGL 4.3 or GL_ARB_compute_shader", __func__);
+
 	// tables might have contained empty strings
 	if (graphicSrcEmpty && computeSrcEmpty)
 		return 0;
