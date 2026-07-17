@@ -8,7 +8,6 @@
 #include "System/TypeToStr.h"
 #include "System/ContainerUtil.h"
 #include "System/Log/ILog.h"
-#include "System/FileSystem/FileHandler.h"
 #include "Rendering/GlobalRenderingInfo.h"
 #include "Rendering/Shaders/Shader.h"
 #include "Rendering/Shaders/ShaderHandler.h"
