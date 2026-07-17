@@ -35,7 +35,7 @@
 #include "System/LoadLock.h"
 
 #if !defined(HEADLESS) && !defined(NO_SOUND)
-#include "System/Sound/OpenAL/EFXManager.h"
+#include "System/Sound/OpenAL/EFX.h"
 #include "System/Sound/OpenAL/EFXPresets.h"
 #endif
 
@@ -348,3 +348,4 @@ void CLoadScreen::SetLoadMessage(const std::string& text, bool replaceLast)
 	Update();
 	Draw();
 }
+

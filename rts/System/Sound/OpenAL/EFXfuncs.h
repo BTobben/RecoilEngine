@@ -4,7 +4,11 @@
 #define _EFX_FUNCS_H_
 
 #include <al.h>
-#include <efx.h>
+#ifdef __APPLE__
+	#include_next <efx.h>
+#else
+	#include <efx.h>
+#endif
 
 //! EFX Function Pointers
 extern LPALGENEFFECTS alGenEffects;

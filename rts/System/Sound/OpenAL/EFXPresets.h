@@ -6,7 +6,11 @@
 #include <string>
 
 #include <al.h>
-#include <efx.h>
+#ifdef __APPLE__
+	#include_next <efx.h>
+#else
+	#include <efx.h>
+#endif
 
 #include "System/float3.h"
 #include "System/UnorderedMap.hpp"

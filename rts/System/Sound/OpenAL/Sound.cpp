@@ -26,7 +26,7 @@
 #include "SoundBuffer.h"
 #include "SoundItem.h"
 #include "ALShared.h"
-#include "EFXManager.h"
+#include "EFX.h"
 #include "EFXPresets.h"
 
 #include "System/Config/ConfigHandler.h"

@@ -7,7 +7,11 @@
 
 #include <al.h>
 #include <alc.h>
-#include <efx.h>
+#ifdef __APPLE__
+	#include_next <efx.h>
+#else
+	#include <efx.h>
+#endif
 
 #include "EFXPresets.h"
 #include "System/UnorderedMap.hpp"
