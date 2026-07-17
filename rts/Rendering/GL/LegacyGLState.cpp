@@ -525,7 +525,7 @@ TextureState CaptureTexture()
 		glGetIntegerv(GL_TEXTURE_BINDING_2D_MULTISAMPLE, &unit.texture2DMultisample);
 		glGetIntegerv(GL_TEXTURE_BINDING_2D_MULTISAMPLE_ARRAY, &unit.texture2DMultisampleArray);
 		if (SupportsSamplerObjects())
-			glGetIntegeri_v(GL_SAMPLER_BINDING, index, &unit.sampler);
+			glGetIntegerv(GL_SAMPLER_BINDING, &unit.sampler);
 	}
 
 	glActiveTexture(state.activeTexture);

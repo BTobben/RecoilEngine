@@ -182,7 +182,7 @@ bool ProbeTextureCaptureQueries(std::string& error)
 		}
 
 		GLint sampler = 0;
-		glGetIntegeri_v(GL_SAMPLER_BINDING, unit, &sampler);
+		glGetIntegerv(GL_SAMPLER_BINDING, &sampler);
 		if (reportErrors("GL_SAMPLER_BINDING", unit))
 			return false;
 	}
