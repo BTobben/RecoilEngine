@@ -156,9 +156,11 @@ set(sources_engine_System_Platform_Windows
 	)
 
 set(sources_engine_System_Threading_Mac
+		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/Mac/CpuTopology.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/Mac/Signal.cpp"
 	)
 set(sources_engine_System_Threading_Linux
+		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/ThreadAffinityGuard.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/Linux/CpuTopology.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/Linux/Futex.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/Linux/ThreadSupport.cpp"
@@ -187,7 +189,6 @@ endif()
 set(sources_engine_System_Threading
 		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/CpuID.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/Threading.cpp"
-		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/ThreadAffinityGuard.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/SharedLib.cpp"
 	)
 
