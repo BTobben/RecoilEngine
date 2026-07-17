@@ -18,6 +18,7 @@
 #include "Rendering/Shaders/Shader.h"
 #include "Rendering/Shaders/ShaderHandler.h"
 #include "System/Config/ConfigHandler.h"
+#include "System/FileSystem/FileHandler.h"
 #include "System/StringUtil.h"
 #include "System/Log/ILog.h"
 #include "fmt/format.h"

@@ -12,6 +12,7 @@
 
 #include "Rendering/GL/myGL.h"
 #include "Rendering/GL/RenderBuffers.h"
+#include "System/FileSystem/FileHandler.h"
 #include "System/Log/ILog.h"
 #include "System/UnorderedSet.hpp"
 #include "System/UnorderedMap.hpp"
