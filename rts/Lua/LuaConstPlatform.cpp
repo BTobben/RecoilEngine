@@ -113,6 +113,10 @@ bool LuaConstPlatform::PushEntries(lua_State* L)
 	LuaPushNamedBool(L, "glHaveGL4", globalRendering->haveGL4);
 	/*** @field Platform.glSupportGL41Core boolean */
 	LuaPushNamedBool(L, "glSupportGL41Core", globalRendering->supportGL41Core);
+	/*** @field Platform.glSupportUniformBuffers boolean */
+	LuaPushNamedBool(L, "glSupportUniformBuffers", globalRendering->supportUniformBuffers);
+	/*** @field Platform.glSupportGLSL420Pack boolean */
+	LuaPushNamedBool(L, "glSupportGLSL420Pack", globalRendering->supportGLSL420Pack);
 	/*** @field Platform.glSupportComputeShaders boolean */
 	LuaPushNamedBool(L, "glSupportComputeShaders", globalRendering->supportComputeShaders);
 	/*** @field Platform.glSupportShaderStorageBuffers boolean */

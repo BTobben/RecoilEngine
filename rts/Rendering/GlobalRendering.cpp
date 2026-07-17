@@ -217,6 +217,8 @@ CR_REG_METADATA(CGlobalRendering, (
 	CR_IGNORED(supportSeamlessCubeMaps),
 	CR_IGNORED(supportFragDepthLayout),
 	CR_IGNORED(supportGL41Core),
+	CR_IGNORED(supportUniformBuffers),
+	CR_IGNORED(supportGLSL420Pack),
 	CR_IGNORED(supportComputeShaders),
 	CR_IGNORED(supportShaderStorageBuffers),
 	CR_IGNORED(supportImageLoadStore),
@@ -353,6 +355,8 @@ CGlobalRendering::CGlobalRendering()
 	, supportSeamlessCubeMaps(false)
 	, supportFragDepthLayout(false)
 	, supportGL41Core(false)
+	, supportUniformBuffers(false)
+	, supportGLSL420Pack(false)
 	, supportComputeShaders(false)
 	, supportShaderStorageBuffers(false)
 	, supportImageLoadStore(false)
@@ -957,6 +961,12 @@ void CGlobalRendering::SetGLSupportFlags()
 	supportGL41Core = globalRenderingInfo.glContextIsCore;
 	supportGL41Core &= IsContextVersionAtLeast(globalRenderingInfo.glContextVersion, {4, 1});
 
+	supportUniformBuffers = static_cast<bool>(GLAD_GL_VERSION_3_1 || GLAD_GL_ARB_uniform_buffer_object);
+	supportUniformBuffers &= IS_GL_FUNCTION_AVAILABLE(glGetUniformBlockIndex);
+	supportUniformBuffers &= IS_GL_FUNCTION_AVAILABLE(glUniformBlockBinding);
+
+	supportGLSL420Pack = static_cast<bool>(GLAD_GL_VERSION_4_2 || GLAD_GL_ARB_shading_language_420pack);
+
 	supportComputeShaders = allowGL43Features;
 	supportComputeShaders &= static_cast<bool>(GLAD_GL_VERSION_4_3 || GLAD_GL_ARB_compute_shader);
 	supportComputeShaders &= IS_GL_FUNCTION_AVAILABLE(glDispatchCompute);
@@ -979,7 +989,7 @@ void CGlobalRendering::SetGLSupportFlags()
 	supportMultiDrawIndirect &= IS_GL_FUNCTION_AVAILABLE(glMultiDrawElementsIndirect);
 
 	haveGL4 = supportMultiDrawIndirect;
-	haveGL4 &= static_cast<bool>(GLAD_GL_ARB_uniform_buffer_object);
+	haveGL4 &= supportUniformBuffers;
 	haveGL4 &= supportShaderStorageBuffers;
 	haveGL4 &= CheckShaderGL4();
 
@@ -1051,7 +1061,7 @@ void CGlobalRendering::QueryGLMaxVals()
 		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &maxTexAnisoLvl);
 
 	// some GLSL relevant information
-	if (GLAD_GL_ARB_uniform_buffer_object) {
+	if (supportUniformBuffers) {
 		glGetIntegerv(GL_MAX_UNIFORM_BUFFER_BINDINGS, &glslMaxUniformBufferBindings);
 		glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE,      &glslMaxUniformBufferSize);
 	}
@@ -1133,6 +1143,8 @@ void CGlobalRendering::LogVersionInfo(const char* sdlVersionStr, const char* glV
 	LOG("\tInitialized OpenGL Context: %i.%i (%s)", globalRenderingInfo.glContextVersion.x, globalRenderingInfo.glContextVersion.y, globalRenderingInfo.glContextIsCore ? "Core" : "Compat");
 	LOG("\tGLSL shader support       : %i", true);
 	LOG("\tGL 4.1 Core context       : %i", supportGL41Core);
+	LOG("\tuniform buffer support    : %i", supportUniformBuffers);
+	LOG("\tGLSL 420pack bindings     : %i", supportGLSL420Pack);
 	LOG("\tcompute shader support    : %i", supportComputeShaders);
 	LOG("\tshader storage support    : %i", supportShaderStorageBuffers);
 	LOG("\timage load/store support  : %i", supportImageLoadStore);

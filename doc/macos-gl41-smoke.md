@@ -12,16 +12,22 @@ The test is deliberately stricter than “the process opened a window”:
 2. verify that startup left no OpenGL errors;
 3. require the engine-owned Core-profile attribute stack;
 4. compile and link `#version 410 core` vertex and fragment shaders;
-5. create a VAO/VBO and RGBA8 framebuffer;
-6. render a known full-screen triangle;
-7. read its center pixel with `glReadPixels` and validate the color;
-8. verify that draw state and stack depth were restored; and
-9. exit zero only when every check passed.
+5. bind a `std140` UBO without GLSL `layout(binding=...)` through
+   `glUniformBlockBinding`;
+6. create a VAO/VBO and RGBA8 framebuffer;
+7. render a known full-screen triangle whose color comes from that UBO;
+8. read its center pixel with `glReadPixels` and validate the color;
+9. verify that draw state and stack depth were restored; and
+10. exit zero only when every check passed.
+
+This explicitly exercises the OpenGL 4.1 fallback used when
+`ARB_shading_language_420pack` is unavailable. Drivers exposing 420pack keep
+using explicit layout bindings.
 
 A successful log contains a machine-readable line similar to:
 
 ```text
-[GLSmoke] PASS context=4.1 Core renderer="Intel Iris Pro OpenGL Engine" pixel=<255,64,0,255> stateRestored=1
+[GLSmoke] PASS context=4.1 Core renderer="Apple M1" pixel=<255,64,0,255> uboBindingFallback=1 stateRestored=1
 ```
 
 ## GitHub Actions

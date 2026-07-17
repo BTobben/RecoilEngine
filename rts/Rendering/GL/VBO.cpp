@@ -37,14 +37,14 @@ bool VBO::IsSupported() const
  * Returns if the current gpu drivers support certain buffer type
  */
 bool VBO::IsSupported(GLenum target) {
-	static bool isRangeMappingSupported = GLAD_GL_ARB_map_buffer_range;
+	static bool isRangeMappingSupported = GLAD_GL_VERSION_3_0 || GLAD_GL_ARB_map_buffer_range;
 	if (!isRangeMappingSupported) //TODO glBufferSubData() fallback ?
 		return false;
 
 	static bool isPBOSupported  = (GLAD_GL_EXT_pixel_buffer_object);
 	static bool isVBOSupported  = (GLAD_GL_ARB_vertex_buffer_object);
-	static bool isUBOSupported  = (GLAD_GL_ARB_uniform_buffer_object);
-	static bool isCopyBuffSupported = (GLAD_GL_ARB_copy_buffer);
+	static bool isUBOSupported  = (GLAD_GL_VERSION_3_1 || GLAD_GL_ARB_uniform_buffer_object);
+	static bool isCopyBuffSupported = (GLAD_GL_VERSION_3_1 || GLAD_GL_ARB_copy_buffer);
 
 	switch (target) {
 	case GL_PIXEL_PACK_BUFFER:
@@ -561,7 +561,7 @@ size_t VBO::GetOffsetAlignment(GLenum target) {
 	switch (target) {
 	case GL_UNIFORM_BUFFER: {
 		static const size_t offsetAlignmentUBO = []() -> size_t {
-			if (!GLAD_GL_ARB_uniform_buffer_object)
+			if (!(GLAD_GL_VERSION_3_1 || GLAD_GL_ARB_uniform_buffer_object))
 				return 1;
 
 			GLint buffAlignment = 1;

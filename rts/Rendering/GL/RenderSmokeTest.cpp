@@ -9,17 +9,21 @@
 #include <vector>
 
 #include "LegacyGLState.h"
+#include "Rendering/UniformConstants.h"
 #include "Rendering/GlobalRenderingInfo.h"
 #include "System/Log/ILog.h"
 
 namespace {
 
 constexpr GLsizei SMOKE_SIZE = 32;
+constexpr GLuint SMOKE_UBO_BINDING = UniformConstants::UBO_PARAMS_IDX;
 
 struct BindingState {
 	GLint program = 0;
 	GLint vertexArray = 0;
 	GLint arrayBuffer = 0;
+	GLint uniformBuffer = 0;
+	GLint indexedUniformBuffer = 0;
 	GLint drawFramebuffer = 0;
 	GLint readFramebuffer = 0;
 	GLint packAlignment = 4;
@@ -29,6 +33,8 @@ struct BindingState {
 		glGetIntegerv(GL_CURRENT_PROGRAM, &program);
 		glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
 		glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &arrayBuffer);
+		glGetIntegerv(GL_UNIFORM_BUFFER_BINDING, &uniformBuffer);
+		glGetIntegeri_v(GL_UNIFORM_BUFFER_BINDING, SMOKE_UBO_BINDING, &indexedUniformBuffer);
 		glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFramebuffer);
 		glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readFramebuffer);
 		glGetIntegerv(GL_PACK_ALIGNMENT, &packAlignment);
@@ -39,6 +45,8 @@ struct BindingState {
 		glUseProgram(program);
 		glBindVertexArray(vertexArray);
 		glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer);
+		glBindBufferBase(GL_UNIFORM_BUFFER, SMOKE_UBO_BINDING, indexedUniformBuffer);
+		glBindBuffer(GL_UNIFORM_BUFFER, uniformBuffer);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, drawFramebuffer);
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, readFramebuffer);
 		glPixelStorei(GL_PACK_ALIGNMENT, packAlignment);
@@ -80,6 +88,7 @@ struct SmokeResources {
 	GLuint program = 0;
 	GLuint vertexArray = 0;
 	GLuint vertexBuffer = 0;
+	GLuint uniformBuffer = 0;
 	GLuint framebuffer = 0;
 	GLuint colorTexture = 0;
 
@@ -93,6 +102,8 @@ struct SmokeResources {
 			glDeleteShader(fragmentShader);
 		if (vertexBuffer != 0)
 			glDeleteBuffers(1, &vertexBuffer);
+		if (uniformBuffer != 0)
+			glDeleteBuffers(1, &uniformBuffer);
 		if (vertexArray != 0)
 			glDeleteVertexArrays(1, &vertexArray);
 		if (framebuffer != 0)
@@ -220,11 +231,14 @@ void main() {
 	gl_Position = vec4(position, 0.0, 1.0);
 }
 )";
-	static constexpr const char* fragmentSource = R"(
+static constexpr const char* fragmentSource = R"(
 #version 410 core
 layout(location = 0) out vec4 color;
+layout(std140) uniform UniformParamsBuffer {
+	vec4 smokeColor;
+};
 void main() {
-	color = vec4(1.0, 0.25, 0.0, 1.0);
+	color = smokeColor;
 }
 )";
 
@@ -254,6 +268,36 @@ void main() {
 		error = "program link failed: " + ProgramLog(resources.program);
 		return false;
 	}
+
+	UniformConstants::BindProgramBlocks(resources.program);
+	const GLuint blockIndex = glGetUniformBlockIndex(resources.program, "UniformParamsBuffer");
+	if (blockIndex == GL_INVALID_INDEX) {
+		error = "GLSL 4.10 uniform block was not active";
+		return false;
+	}
+
+	GLint blockBinding = -1;
+	glGetActiveUniformBlockiv(resources.program, blockIndex, GL_UNIFORM_BLOCK_BINDING, &blockBinding);
+	if (blockBinding != static_cast<GLint>(SMOKE_UBO_BINDING)) {
+		error = "engine uniform block fallback did not assign the expected binding";
+		return false;
+	}
+	return true;
+}
+
+bool CreateUniformBuffer(SmokeResources& resources, std::string& error)
+{
+	static constexpr std::array<GLfloat, 4> smokeColor = {1.0f, 0.25f, 0.0f, 1.0f};
+
+	glGenBuffers(1, &resources.uniformBuffer);
+	if (resources.uniformBuffer == 0) {
+		error = "failed to allocate UBO";
+		return false;
+	}
+
+	glBindBuffer(GL_UNIFORM_BUFFER, resources.uniformBuffer);
+	glBufferData(GL_UNIFORM_BUFFER, sizeof(smokeColor), smokeColor.data(), GL_STATIC_DRAW);
+	glBindBufferBase(GL_UNIFORM_BUFFER, SMOKE_UBO_BINDING, resources.uniformBuffer);
 	return true;
 }
 
@@ -373,9 +417,11 @@ bool GL::RunStartupRenderSmokeTest(std::string& report)
 		);
 		SmokeResources resources;
 
-		do {
-			if (!CreateProgram(resources, error))
-				break;
+			do {
+				if (!CreateProgram(resources, error))
+					break;
+				if (!CreateUniformBuffer(resources, error))
+					break;
 			if (!CreateRenderTarget(resources, error))
 				break;
 			if (!CreateTriangle(resources, error))
@@ -442,6 +488,7 @@ bool GL::RunStartupRenderSmokeTest(std::string& report)
 			<< ',' << static_cast<unsigned>(centerPixel[1])
 			<< ',' << static_cast<unsigned>(centerPixel[2])
 			<< ',' << static_cast<unsigned>(centerPixel[3]) << ">"
+			<< " uboBindingFallback=1"
 			<< " stateRestored=1";
 		report = stream.str();
 		LOG("[GLSmoke] %s", report.c_str());

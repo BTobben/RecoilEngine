@@ -109,8 +109,31 @@ CR_REG_METADATA(UniformParamsBuffer, (
 
 bool UniformConstants::Supported()
 {
-	static bool supported = VBO::IsSupported(GL_UNIFORM_BUFFER) && GLAD_GL_ARB_shading_language_420pack; //UBO && UBO layout(binding=x)
-	return supported;
+	return VBO::IsSupported(GL_UNIFORM_BUFFER)
+		&& IS_GL_FUNCTION_AVAILABLE(glGetUniformBlockIndex)
+		&& IS_GL_FUNCTION_AVAILABLE(glUniformBlockBinding);
+}
+
+bool UniformConstants::SupportsExplicitBindings()
+{
+	return GLAD_GL_VERSION_4_2 || GLAD_GL_ARB_shading_language_420pack;
+}
+
+void UniformConstants::BindProgramBlocks(const unsigned int program)
+{
+	if (!Supported() || program == 0)
+		return;
+
+	static constexpr std::array<std::pair<const char*, int>, 2> blocks = {{
+		{"UniformMatricesBuffer", UBO_MATRIX_IDX},
+		{"UniformParamsBuffer", UBO_PARAMS_IDX},
+	}};
+
+	for (const auto& [name, binding]: blocks) {
+		const GLuint blockIndex = glGetUniformBlockIndex(program, name);
+		if (blockIndex != GL_INVALID_INDEX)
+			glUniformBlockBinding(program, blockIndex, binding);
+	}
 }
 
 void UniformConstants::Init()
@@ -120,8 +143,21 @@ void UniformConstants::Init()
 
 	if (!Supported()) {
 	#ifndef HEADLESS
-		LOG_L(L_ERROR, "[UniformConstants::%s] Important OpenGL extensions are not supported by the system\n  GLAD_GL_ARB_uniform_buffer_object = %d\n  GLAD_GL_ARB_shading_language_420pack = %d", __func__, GLAD_GL_ARB_uniform_buffer_object, GLAD_GL_ARB_shading_language_420pack);
+		LOG_L(L_ERROR, "[UniformConstants::%s] Uniform buffers are not supported by the system", __func__);
 	#endif
+		return;
+	}
+
+	if (globalRendering->glslMaxUniformBufferBindings <= UBO_PARAMS_IDX
+		|| globalRendering->glslMaxUniformBufferSize < static_cast<int>(sizeof(UniformMatricesBuffer))
+		|| globalRendering->glslMaxUniformBufferSize < static_cast<int>(sizeof(UniformParamsBuffer))) {
+		LOG_L(L_ERROR,
+			"[UniformConstants::%s] Uniform buffer limits are too small (bindings=%d, blockSize=%d, matrices=%zu, params=%zu)",
+			__func__,
+			globalRendering->glslMaxUniformBufferBindings,
+			globalRendering->glslMaxUniformBufferSize,
+			sizeof(UniformMatricesBuffer),
+			sizeof(UniformParamsBuffer));
 		return;
 	}
 
@@ -138,8 +174,12 @@ void UniformConstants::Init()
 		upbSBT = IStreamBuffer<UniformParamsBuffer  >::CreateInstance(p);
 	}
 
-	glslDefinitions[0] = SetGLSLDefinition<UniformMatricesBuffer>(UBO_MATRIX_IDX);
-	glslDefinitions[1] = SetGLSLDefinition<UniformParamsBuffer  >(UBO_PARAMS_IDX);
+	const bool explicitBindings = SupportsExplicitBindings();
+	glslDefinitions[0] = SetGLSLDefinition<UniformMatricesBuffer>(UBO_MATRIX_IDX, explicitBindings);
+	glslDefinitions[1] = SetGLSLDefinition<UniformParamsBuffer  >(UBO_PARAMS_IDX, explicitBindings);
+
+	LOG("[UniformConstants::%s] UBO route initialized (explicit420packBindings=%d, matrices=%zu, params=%zu, maxBlockSize=%d)",
+		__func__, explicitBindings, sizeof(UniformMatricesBuffer), sizeof(UniformParamsBuffer), globalRendering->glslMaxUniformBufferSize);
 
 	initialized = true;
 }

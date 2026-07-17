@@ -757,6 +757,8 @@ int LuaShaders::CreateShader(lua_State* L)
 
 	glLinkProgram(prog);
 	glGetProgramiv(prog, GL_LINK_STATUS, &linkStatus);
+	if (linkStatus == GL_TRUE)
+		UniformConstants::BindProgramBlocks(prog);
 
 	// Parse active uniforms and locations
 	GLint currentProgram = FillActiveUniforms(p);

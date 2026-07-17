@@ -58,6 +58,18 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Checkout paired BAR content and configuration
+        uses: actions/checkout@v4
+        with:
+          repository: BTobben/Beyond-All-Reason
+          ref: agent/macos-gl41-ubo-content
+          path: bar-content
+          fetch-depth: 1
+          lfs: false
+          sparse-checkout: |
+            common
+            modinfo.lua
+
       - name: Restore compiler cache
         uses: actions/cache/restore@v5
         with:
@@ -105,24 +117,18 @@ jobs:
       - name: Create isolated smoke configuration
         run: |
           mkdir -p build/smoke-write
+          cp bar-content/common/configs/macos-gl41.cfg build/gl41-smoke.cfg
           printf '%s\n' \
-            'Fullscreen=0' \
-            'WindowBorderless=0' \
             'XResolutionWindowed=128' \
             'YResolutionWindowed=128' \
             'WindowPosX=32' \
             'WindowPosY=32' \
-            'MSAALevel=0' \
-            'ForceCoreContext=1' \
-            'GLContextMajorVersion=4' \
-            'GLContextMinorVersion=1' \
-            'ForceDisableGL4=1' \
-            'UseFontConfigSystemFonts=0' \
-            > build/gl41-smoke.cfg
+            >> build/gl41-smoke.cfg
+          git -C bar-content rev-parse HEAD | tee build/bar-content.sha
 
       - name: Run real engine startup and render smoke
         env:
-          SPRING_DATADIR: '${{ github.workspace }}/build:${{ github.workspace }}/cont'
+          SPRING_DATADIR: '${{ github.workspace }}/build:${{ github.workspace }}/cont:${{ github.workspace }}/bar-content'
         run: |
           set -o pipefail
           ./build/spring \
@@ -144,7 +150,9 @@ jobs:
           path: |
             build/gl41-smoke.cfg
             build/gl41-smoke.stdout.log
+            build/bar-content.sha
             build/smoke-write/infolog.txt
+            bar-content/common/configs/macos-gl41.cfg
             build/CMakeCache.txt
             build/CMakeFiles/CMakeConfigureLog.yaml
 

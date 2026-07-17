@@ -334,6 +334,8 @@ public:
 	 * callers can degrade individual features on OpenGL 4.1 contexts.
 	 */
 	bool supportGL41Core;
+	bool supportUniformBuffers;
+	bool supportGLSL420Pack;
 	bool supportComputeShaders;
 	bool supportShaderStorageBuffers;
 	bool supportImageLoadStore;
@@ -433,4 +435,3 @@ private:
 };
 
 extern CGlobalRendering* globalRendering;
-

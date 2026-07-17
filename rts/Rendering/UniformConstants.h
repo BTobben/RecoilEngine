@@ -99,6 +99,8 @@ public:
 		return uniformConstantsInstance;
 	};
 	static bool Supported();
+	static bool SupportsExplicitBindings();
+	static void BindProgramBlocks(unsigned int program);
 public:
 	void Init();
 	void Kill();
@@ -116,7 +118,7 @@ private:
 	static void UpdateParamsImpl(UniformParamsBuffer* updateBuffer);
 
 	template<typename T>
-	static std::string SetGLSLDefinition(int binding);
+	static std::string SetGLSLDefinition(int binding, bool explicitBinding);
 public:
 	static constexpr int UBO_MATRIX_IDX = 0;
 	static constexpr int UBO_PARAMS_IDX = 1;
@@ -134,7 +136,7 @@ private:
 #endif
 
 template<typename T>
-inline std::string UniformConstants::SetGLSLDefinition(int binding)
+inline std::string UniformConstants::SetGLSLDefinition(int binding, bool explicitBinding)
 {
 	const T dummy{};
 
@@ -145,7 +147,10 @@ inline std::string UniformConstants::SetGLSLDefinition(int binding)
 
 	std::ostringstream output;
 
-	output << fmt::format("layout(std140, binding = {}) uniform {} {{\n", binding, dummy.GetClass()->name); // {{ - escaped {
+	if (explicitBinding)
+		output << fmt::format("layout(std140, binding = {}) uniform {} {{\n", binding, dummy.GetClass()->name); // {{ - escaped {
+	else
+		output << fmt::format("layout(std140) uniform {} {{\n", dummy.GetClass()->name); // {{ - escaped {
 
 	for (const auto& [offset, info] : membersMap) {
 		const auto& [name, tname] = info;

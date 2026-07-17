@@ -7,6 +7,7 @@
 #include "Rendering/GL/myGL.h"
 #include "Rendering/GlobalRendering.h"
 #include "Rendering/GlobalRenderingInfo.h"
+#include "Rendering/UniformConstants.h"
 
 #include "System/SafeUtil.h"
 #include "System/StringUtil.h"
@@ -753,6 +754,12 @@ namespace Shader {
 		// copy full program state from old to new program (uniforms etc.)
 		if (IsValid())
 			GLSLCopyState(objID, oldValid ? oldProgID : 0, &uniformStates);
+
+		// GLSL 4.10 has uniform blocks but not layout(binding=...). Bind the
+		// engine-owned blocks after every link/cache restore so 420pack remains
+		// an optimization rather than a hard requirement.
+		if (IsValid())
+			UniformConstants::BindProgramBlocks(objID);
 
 		// delete old program when not further used
 		if (deleteOldShader)
