@@ -9,6 +9,7 @@
 #include "System/ContainerUtil.h"
 #include "System/Log/ILog.h"
 #include "System/FileSystem/FileHandler.h"
+#include "Rendering/GlobalRenderingInfo.h"
 #include "Rendering/Shaders/Shader.h"
 #include "Rendering/Shaders/ShaderHandler.h"
 
@@ -129,9 +130,11 @@ public:
 
 		vertSrc = fmt::sprintf(vertSrc,
 			vsHeader,
+			globalRenderingInfo.glContextIsCore ? "uniform mat4 transformMatrix = mat4(1.0);" : "",
 			vsInputs,
 			varyingsVS,
 			vsAssignment,
+			globalRenderingInfo.glContextIsCore ? "transformMatrix" : "gl_ModelViewProjectionMatrix",
 			vsPosVertex
 		);
 
@@ -193,6 +196,12 @@ private:
 	static const std::string GetFragOutput();
 
 	static void GetShaderHeaders(std::string& vsHeader, std::string& fsHeader) {
+		if (globalRenderingInfo.glContextIsCore) {
+			vsHeader = "#version 410 core";
+			fsHeader = "#version 410 core";
+			return;
+		}
+
 		if (globalRendering->supportExplicitAttribLoc) {
 			vsHeader = fmt::format("{}{}{}", "#version 150 compatibility", nl, "#extension GL_ARB_explicit_attrib_location : require");
 		}

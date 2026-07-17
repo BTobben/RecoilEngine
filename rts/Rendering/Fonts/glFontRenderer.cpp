@@ -2,6 +2,7 @@
 
 #include "glFont.h"
 #include "Rendering/GlobalRendering.h"
+#include "Rendering/GlobalRenderingInfo.h"
 #include "Rendering/Shaders/Shader.h"
 #include "System/Log/ILog.h"
 #include "System/SafeUtil.h"
@@ -68,6 +69,64 @@ void main() {
 
 	outColor = texture(tex, vUV / texSize);
 	outColor = outColor*vCol;
+}
+)";
+
+static constexpr const char* vsFont410Core = R"(
+#version 410 core
+
+layout (location = 0) in vec3 pos;
+layout (location = 1) in vec2 uv;
+layout (location = 2) in vec4 col;
+
+uniform mat4 transformMatrix = mat4(1.0);
+
+out Data {
+	vec4 vCol;
+	vec2 vUV;
+};
+
+void main() {
+	vCol = col;
+	vUV  = uv;
+	gl_Position = transformMatrix * vec4(pos, 1.0);
+}
+)";
+
+static constexpr const char* fsFont410Core = R"(
+#version 410 core
+
+uniform sampler2D tex;
+
+in Data {
+	vec4 vCol;
+	vec2 vUV;
+};
+
+layout (location = 0) out vec4 outColor;
+
+void main() {
+	vec2 texSize = vec2(textureSize(tex, 0));
+	float alpha = texture(tex, vUV / texSize).x;
+	outColor = vec4(vCol.rgb, vCol.a * alpha);
+}
+)";
+
+static constexpr const char* fsFontColor410Core = R"(
+#version 410 core
+
+uniform sampler2D tex;
+
+in Data {
+	vec4 vCol;
+	vec2 vUV;
+};
+
+layout (location = 0) out vec4 outColor;
+
+void main() {
+	vec2 texSize = vec2(textureSize(tex, 0));
+	outColor = texture(tex, vUV / texSize) * vCol;
 }
 )";
 
@@ -141,7 +200,13 @@ CglShaderFontRenderer::CglShaderFontRenderer()
 	fontShaderColor = std::make_unique<Shader::GLSLProgramObject>("[GL-Font]");
 
 	LOG("[CglFont::%s] Creating Font shaders: GLAD_GL_ARB_explicit_attrib_location = %s", __func__, globalRendering->supportExplicitAttribLoc ? "true" : "false");
-	if (globalRendering->supportExplicitAttribLoc) {
+	if (globalRenderingInfo.glContextIsCore) {
+		fontShader->AttachShaderObject(new Shader::GLSLShaderObject(GL_VERTEX_SHADER  , vsFont410Core));
+		fontShader->AttachShaderObject(new Shader::GLSLShaderObject(GL_FRAGMENT_SHADER, fsFont410Core));
+		fontShaderColor->AttachShaderObject(new Shader::GLSLShaderObject(GL_VERTEX_SHADER  , vsFont410Core));
+		fontShaderColor->AttachShaderObject(new Shader::GLSLShaderObject(GL_FRAGMENT_SHADER, fsFontColor410Core));
+	}
+	else if (globalRendering->supportExplicitAttribLoc) {
 		fontShader->AttachShaderObject(new Shader::GLSLShaderObject(GL_VERTEX_SHADER  , vsFont330));
 		fontShader->AttachShaderObject(new Shader::GLSLShaderObject(GL_FRAGMENT_SHADER, fsFont330));
 		fontShaderColor->AttachShaderObject(new Shader::GLSLShaderObject(GL_VERTEX_SHADER  , vsFont330));
@@ -212,7 +277,8 @@ void CglShaderFontRenderer::HandleTextureUpdate(CFontTexture& fnt, bool onlyUplo
 		fnt.UpdateGlyphAtlasTexture();
 
 	GLint dl = 0;
-	glGetIntegerv(GL_LIST_INDEX, &dl);
+	if (!globalRenderingInfo.glContextIsCore)
+		glGetIntegerv(GL_LIST_INDEX, &dl);
 	if (dl == 0) {
 		fnt.UploadGlyphAtlasTextureImpl();
 	}
@@ -223,7 +289,8 @@ void CglShaderFontRenderer::PushGLState(const CglFont& fnt)
 	RECOIL_DETAILED_TRACY_ZONE;
 	glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_ALPHA_TEST); //just in case
+	if (!globalRenderingInfo.glContextIsCore)
+		glDisable(GL_ALPHA_TEST); // just in case
 	glEnable(GL_BLEND);
 	if (!userDefinedBlending)
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

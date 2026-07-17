@@ -1,0 +1,121 @@
+name: macOS OpenGL 4.1 startup and render smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/macos-gl41-smoke.yml'
+      - 'CMakeLists.txt'
+      - 'rts/**'
+      - 'doc/macos-gl41-*.md'
+  push:
+    branches:
+      - 'agent/macos-gl41-*'
+    paths:
+      - '.github/workflows/macos-gl41-smoke.yml'
+      - 'CMakeLists.txt'
+      - 'rts/**'
+      - 'doc/macos-gl41-*.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-gl41-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  startup-render-smoke:
+    name: Apple Silicon macOS 15 / OpenGL 4.1 Core
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+      HOMEBREW_PREFIX: /opt/homebrew
+
+    steps:
+      - name: Checkout source and submodules
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install native build dependencies
+        run: >-
+          brew install
+          cmake
+          ninja
+          pkgconf
+          sdl2-compat
+          devil
+          fontconfig
+          freetype
+          expat
+          xz
+
+      - name: Configure graphical engine
+        env:
+          CMAKE_PREFIX_PATH: /opt/homebrew;/opt/homebrew/opt/expat
+          PKG_CONFIG_PATH: /opt/homebrew/lib/pkgconfig:/opt/homebrew/opt/expat/lib/pkgconfig
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=RELEASE \
+            -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH" \
+            -DMACOSX_BUNDLE=OFF \
+            -DINSTALL_PORTABLE=ON \
+            -DPREFER_STATIC_LIBS=OFF \
+            -DNO_SOUND=ON \
+            -DENABLE_STREFLOP=OFF \
+            -DAI_TYPES=NONE \
+            -DBUILD_spring-dedicated=OFF \
+            -DBUILD_spring-headless=OFF
+
+      - name: Build graphical engine
+        run: cmake --build build --target engine-legacy --parallel 3
+
+      - name: Create isolated smoke configuration
+        run: |
+          mkdir -p build/smoke-write
+          printf '%s\n' \
+            'Fullscreen=0' \
+            'WindowBorderless=0' \
+            'XResolutionWindowed=128' \
+            'YResolutionWindowed=128' \
+            'WindowPosX=32' \
+            'WindowPosY=32' \
+            'MSAALevel=0' \
+            'ForceCoreContext=1' \
+            'GLContextMajorVersion=4' \
+            'GLContextMinorVersion=1' \
+            'ForceDisableGL4=1' \
+            'UseFontConfigSystemFonts=0' \
+            > build/gl41-smoke.cfg
+
+      - name: Run real engine startup and render smoke
+        env:
+          SPRING_DATADIR: ${{ github.workspace }}/build
+        run: |
+          set -o pipefail
+          ./build/spring \
+            --gl-smoke-test \
+            --window \
+            --isolation \
+            --isolation-dir="${{ github.workspace }}/build" \
+            --write-dir="${{ github.workspace }}/build/smoke-write" \
+            --config="${{ github.workspace }}/build/gl41-smoke.cfg" \
+            2>&1 | tee build/gl41-smoke.stdout.log
+          grep -F '[GLSmoke] PASS context=4.1 Core' build/gl41-smoke.stdout.log
+
+      - name: Collect diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-gl41-smoke-diagnostics
+          if-no-files-found: warn
+          path: |
+            build/gl41-smoke.cfg
+            build/gl41-smoke.stdout.log
+            build/smoke-write/infolog.txt
+            build/CMakeCache.txt
+            build/CMakeFiles/CMakeConfigureLog.yaml

@@ -2,17 +2,19 @@ static constexpr const char* vsRenderBufferSrc = R"(
 // Version and extensions
 %s
 
-// VS input attributes
+// Core profiles have no built-in matrix state. Identity preserves the
+// normalized-coordinate path while callers migrate explicit transforms.
 %s
 
-//uniform mat4 transformMatrix = mat4(1.0);
+// VS input attributes
+%s
 
 // VS output attributes
 %s
 
 void main() {
 %s
-	gl_Position = gl_ModelViewProjectionMatrix * %s;
+	gl_Position = %s * %s;
 }
 )";
 

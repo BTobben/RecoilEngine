@@ -70,6 +70,12 @@ does not call `glShadeModel` in a Core context, and avoids removed Core-profile
 limit queries. The splash renderer also skips the obsolete texture-target
 enable while retaining its shader texture binding.
 
+The buffered startup and font shaders select GLSL 4.10 Core sources instead
+of compatibility-profile built-ins. Their transitional Core transform is an
+identity uniform, which is correct for the normalized splash path and keeps
+startup testable. It is not a replacement for the remaining world/UI matrix
+stack migration.
+
 ## Known limitations
 
 This foundation does **not** yet make the graphical engine playable on macOS.
@@ -92,6 +98,11 @@ Compiling on ARM64 is not proof of cross-architecture lockstep parity.
 
 ## Validation
 
+The native `--gl-smoke-test` mode and macOS Actions job are documented in
+[`macos-gl41-smoke.md`](macos-gl41-smoke.md). They exercise the real graphical
+engine startup, GLSL 4.10 compilation, a VAO/VBO draw, FBO readback, and Core
+attribute-state restoration.
+
 Useful local checks are:
 
 ```sh
@@ -105,8 +116,8 @@ rg -n \
 
 A Linux build verifies that the existing GL4.3 path still compiles. Runtime
 validation should cover both the normal configuration and
-`ForceDisableGL4=1`. A real macOS 4.1 Core test remains required for every
-compatibility-profile migration.
+`ForceDisableGL4=1`. The macOS smoke job provides a repeatable Core 4.1 gate;
+full menu, game, and BAR widget coverage remains a separate milestone.
 
 ## Long-term direction
 

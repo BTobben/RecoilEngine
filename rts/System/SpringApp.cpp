@@ -55,6 +55,7 @@
 #include "Rendering/GL/FBO.h"
 #include "Rendering/Models/ModelsMemStorage.h"
 #include "Rendering/GL/RenderBuffers.h"
+#include "Rendering/GL/RenderSmokeTest.h"
 #include "Rendering/Shaders/ShaderHandler.h"
 #include "Rendering/Textures/Bitmap.h"
 #include "Rendering/Textures/NamedTextures.h"
@@ -126,6 +127,7 @@ CONFIG(std::string, SplashScreenDir).defaultValue(".");
 
 DEFINE_bool_EX  (sync_version,       "sync-version",       false, "Display program sync version (for online gaming)");
 DEFINE_bool_EX  (gen_fontconfig,     "gen-fontconfig",     false, "Generate font-configuration database");
+DEFINE_bool_EX  (gl_smoke_test,      "gl-smoke-test",      false, "Initialize the graphical engine, render and read back a GLSL 4.10 Core triangle, then exit");
 DEFINE_bool     (fullscreen,                               false, "Run in fullscreen mode");
 DEFINE_bool     (window,                                   false, "Run in windowed mode");
 DEFINE_bool     (hidden,                                   false, "Start in background (minimised, no taskbar entry)");
@@ -311,6 +313,14 @@ bool SpringApp::Init()
 	// Lua socket restrictions
 	CLuaSocketRestrictions::InitStatic();
 	LuaVFSDownload::Init();
+
+	if (FLAGS_gl_smoke_test) {
+		std::string report;
+		const bool passed = GL::RunStartupRenderSmokeTest(report);
+		spring::exitCode = passed ? spring::EXIT_CODE_SUCCESS : spring::EXIT_CODE_FAILURE;
+		gu->globalQuit = true;
+		return true;
+	}
 
 	// Create CGameSetup and CPreGame objects
 	Startup();

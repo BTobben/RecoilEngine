@@ -107,7 +107,15 @@ endif (USE_MIMALLOC)
 
 
 if(UNIX AND NOT (CMAKE_SYSTEM_NAME MATCHES "OpenBSD"))
-	find_package_static(Libunwind 1.4.0 REQUIRED)
+	if (APPLE)
+		# Apple ships libunwind headers in the SDK and its implementation in
+		# libSystem. No separate library or Homebrew package is required.
+		if (NOT TARGET libunwind::libunwind)
+			add_library(libunwind::libunwind INTERFACE IMPORTED)
+		endif()
+	else()
+		find_package_static(Libunwind 1.4.0 REQUIRED)
+	endif()
 	prefer_static_libs()
 	find_library(LZMA_LIBRARY lzma)
 	unprefer_static_libs()
