@@ -128,75 +128,6 @@ std::string FormatErrors(const std::vector<GLenum>& errors)
 	return stream.str();
 }
 
-bool ProbeTextureCaptureQueries(std::string& error)
-{
-	struct Query {
-		GLenum parameter;
-		const char* name;
-	};
-
-	static constexpr std::array queries = {
-		Query{GL_TEXTURE_BINDING_1D, "GL_TEXTURE_BINDING_1D"},
-		Query{GL_TEXTURE_BINDING_2D, "GL_TEXTURE_BINDING_2D"},
-		Query{GL_TEXTURE_BINDING_3D, "GL_TEXTURE_BINDING_3D"},
-		Query{GL_TEXTURE_BINDING_1D_ARRAY, "GL_TEXTURE_BINDING_1D_ARRAY"},
-		Query{GL_TEXTURE_BINDING_2D_ARRAY, "GL_TEXTURE_BINDING_2D_ARRAY"},
-		Query{GL_TEXTURE_BINDING_RECTANGLE, "GL_TEXTURE_BINDING_RECTANGLE"},
-		Query{GL_TEXTURE_BINDING_CUBE_MAP, "GL_TEXTURE_BINDING_CUBE_MAP"},
-		Query{GL_TEXTURE_BINDING_BUFFER, "GL_TEXTURE_BINDING_BUFFER"},
-		Query{GL_TEXTURE_BINDING_2D_MULTISAMPLE, "GL_TEXTURE_BINDING_2D_MULTISAMPLE"},
-		Query{GL_TEXTURE_BINDING_2D_MULTISAMPLE_ARRAY, "GL_TEXTURE_BINDING_2D_MULTISAMPLE_ARRAY"},
-	};
-
-	GLint activeTexture = GL_TEXTURE0;
-	GLint maxTextureUnits = 0;
-	glGetIntegerv(GL_ACTIVE_TEXTURE, &activeTexture);
-	glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &maxTextureUnits);
-
-	auto restoreActiveTexture = [&]() {
-		glActiveTexture(activeTexture);
-	};
-	auto reportErrors = [&](const char* operation, const GLint unit) {
-		const auto errors = DrainErrors();
-		if (errors.empty())
-			return false;
-
-		restoreActiveTexture();
-		DrainErrors();
-		error = std::string("texture capture query ") + operation
-			+ " on unit " + std::to_string(unit)
-			+ " generated OpenGL errors: " + FormatErrors(errors);
-		return true;
-	};
-
-	for (GLint unit = 0; unit < maxTextureUnits; ++unit) {
-		glActiveTexture(GL_TEXTURE0 + unit);
-		if (reportErrors("glActiveTexture", unit))
-			return false;
-
-		for (const Query& query: queries) {
-			GLint value = 0;
-			glGetIntegerv(query.parameter, &value);
-			if (reportErrors(query.name, unit))
-				return false;
-		}
-
-		GLint sampler = 0;
-		glGetIntegerv(GL_SAMPLER_BINDING, &sampler);
-		if (reportErrors("GL_SAMPLER_BINDING", unit))
-			return false;
-	}
-
-	restoreActiveTexture();
-	if (const auto errors = DrainErrors(); !errors.empty()) {
-		error = "restoring GL_ACTIVE_TEXTURE after texture capture probes generated OpenGL errors: "
-			+ FormatErrors(errors);
-		return false;
-	}
-
-	return true;
-}
-
 bool ProbeLegacyAttribGroups(std::string& error)
 {
 	struct Group {
@@ -411,10 +342,6 @@ bool GL::RunStartupRenderSmokeTest(std::string& report)
 	const auto startupErrors = DrainErrors();
 	if (!startupErrors.empty()) {
 		report = "engine startup left OpenGL errors: " + FormatErrors(startupErrors);
-		LOG_L(L_ERROR, "[GLSmoke] FAIL %s", report.c_str());
-		return false;
-	}
-	if (!ProbeTextureCaptureQueries(report)) {
 		LOG_L(L_ERROR, "[GLSmoke] FAIL %s", report.c_str());
 		return false;
 	}

@@ -133,7 +133,7 @@ jobs:
             --write-dir="${{ github.workspace }}/build/smoke-write" \
             --config="${{ github.workspace }}/build/gl41-smoke.cfg" \
             2>&1 | tee build/gl41-smoke.stdout.log
-          grep -F '[GLSmoke] PASS context=4.1 Core' build/gl41-smoke.stdout.log
+          grep -F '[GLSmoke] PASS context=4.1 Core' build/smoke-write/infolog.txt
 
       - name: Collect diagnostics
         if: always()
