@@ -4,7 +4,7 @@
 #define _EFX_FUNCS_H_
 
 #include <al.h>
-#include <AL/efx.h>
+#include <efx.h>
 
 //! EFX Function Pointers
 extern LPALGENEFFECTS alGenEffects;

@@ -6,7 +6,7 @@
 #include <alc.h>
 
 #include "ALShared.h"
-#include "EFX.h"
+#include "EFXManager.h"
 #include "System/Sound/IAudioChannel.h"
 #include "MusicStream.h"
 #include "System/Sound/SoundLog.h"
@@ -387,4 +387,3 @@ void CSoundSource::UpdateVolume()
 		return;
 	}
 }
-
