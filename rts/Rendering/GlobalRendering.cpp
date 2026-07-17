@@ -1695,6 +1695,23 @@ void CGlobalRendering::ReadWindowPosAndSize()
 	SDL_GetWindowSize(sdlWindow, &winSizeX, &winSizeY);
 	SDL_GetWindowPosition(sdlWindow, &winPosX, &winPosY);
 
+	// SDL window coordinates and OpenGL drawable pixels can differ on HiDPI
+	// displays.  Keep the established logical window geometry for now, but
+	// expose both values so macOS viewport issues can be diagnosed from an
+	// infolog without attaching a debugger.
+	int drawableSizeX = 0;
+	int drawableSizeY = 0;
+	SDL_GL_GetDrawableSize(sdlWindow, &drawableSizeX, &drawableSizeY);
+
+	LOG("[GR::%s] SDL geometry: window=<%d,%d> drawable=<%d,%d> scale=<%.3f,%.3f> position=<%d,%d>",
+		__func__,
+		winSizeX, winSizeY,
+		drawableSizeX, drawableSizeY,
+		(winSizeX > 0) ? (drawableSizeX / float(winSizeX)) : 0.0f,
+		(winSizeY > 0) ? (drawableSizeY / float(winSizeY)) : 0.0f,
+		winPosX, winPosY
+	);
+
 	//enforce >=0 https://github.com/beyond-all-reason/spring/issues/23
 	//winPosX = std::max(winPosX, 0);
 	//winPosY = std::max(winPosY, 0);
@@ -2147,6 +2164,22 @@ bool CGlobalRendering::ToggleGLDebugOutput(unsigned int msgSrceIdx, unsigned int
 void CGlobalRendering::LoadViewport()
 {
 	glViewport(viewPosX, viewPosY, viewSizeX, viewSizeY);
+
+	static bool loggedViewport = false;
+	if (!loggedViewport) {
+		GLint appliedViewport[4] = {0, 0, 0, 0};
+		GLint drawFramebuffer = 0;
+		glGetIntegerv(GL_VIEWPORT, appliedViewport);
+		glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFramebuffer);
+
+		LOG("[GR::%s] viewport: requested=<%d,%d,%d,%d> applied=<%d,%d,%d,%d> drawFramebuffer=%d",
+			__func__,
+			viewPosX, viewPosY, viewSizeX, viewSizeY,
+			appliedViewport[0], appliedViewport[1], appliedViewport[2], appliedViewport[3],
+			drawFramebuffer
+		);
+		loggedViewport = true;
+	}
 }
 
 void CGlobalRendering::LoadDualViewport()
