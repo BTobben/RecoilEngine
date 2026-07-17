@@ -19,6 +19,7 @@ target_link_libraries(Game PRIVATE
 	 prd::jsoncpp
 	 streflop
 	 fmt::fmt
+	 nowide::nowide
 )
 
 ### Assemble libraries
