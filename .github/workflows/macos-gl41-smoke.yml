@@ -7,6 +7,8 @@ on:
       - '.github/workflows/macos-gl41-smoke.yml'
       - 'CMakeLists.txt'
       - 'rts/**'
+      - 'installer/Mac/BAR-GL41-Info.plist'
+      - 'installer/Mac/bar-gl41-launcher.sh'
       - 'doc/macos-gl41-*.md'
       - 'macos-build-bar.sh'
   push:
@@ -16,6 +18,8 @@ on:
       - '.github/workflows/macos-gl41-smoke.yml'
       - 'CMakeLists.txt'
       - 'rts/**'
+      - 'installer/Mac/BAR-GL41-Info.plist'
+      - 'installer/Mac/bar-gl41-launcher.sh'
       - 'doc/macos-gl41-*.md'
       - 'macos-build-bar.sh'
 
@@ -73,7 +77,18 @@ jobs:
             modinfo.lua
 
       - name: Validate one-command bootstrap syntax
-        run: bash -n macos-build-bar.sh
+        run: |
+          bash -n macos-build-bar.sh
+          bash -n installer/Mac/bar-gl41-launcher.sh
+
+      - name: Fetch upstream engine version tags
+        run: |
+          if [ "$(git rev-parse --is-shallow-repository)" = 'true' ]; then
+            git fetch --unshallow --force --tags https://github.com/beyond-all-reason/RecoilEngine.git master
+          else
+            git fetch --force --tags https://github.com/beyond-all-reason/RecoilEngine.git master
+          fi
+          git describe --tags --match '[0-9]*' --long
 
       - name: Restore compiler cache
         uses: actions/cache/restore@v5
@@ -97,28 +112,43 @@ jobs:
           expat
           xz
           sevenzip
+          openal-soft
+          libogg
+          libvorbis
 
       - name: Configure graphical engine
         env:
-          CMAKE_PREFIX_PATH: /opt/homebrew;/opt/homebrew/opt/expat
-          PKG_CONFIG_PATH: /opt/homebrew/lib/pkgconfig:/opt/homebrew/opt/expat/lib/pkgconfig
+          CMAKE_PREFIX_PATH: /opt/homebrew;/opt/homebrew/opt/expat;/opt/homebrew/opt/openal-soft;/opt/homebrew/opt/libogg;/opt/homebrew/opt/libvorbis
+          PKG_CONFIG_PATH: /opt/homebrew/lib/pkgconfig:/opt/homebrew/opt/expat/lib/pkgconfig:/opt/homebrew/opt/libogg/lib/pkgconfig:/opt/homebrew/opt/libvorbis/lib/pkgconfig
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=RELEASE \
+            -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/build/Beyond All Reason GL41.app/Contents/Resources/runtime" \
             -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DMACOSX_BUNDLE=OFF \
             -DINSTALL_PORTABLE=ON \
             -DPREFER_STATIC_LIBS=OFF \
-            -DNO_SOUND=ON \
+            -DNO_SOUND=OFF \
             -DENABLE_STREFLOP=ON \
             -DAI_TYPES=NONE \
             -DBUILD_spring-dedicated=OFF \
             -DBUILD_spring-headless=OFF
 
-      - name: Build graphical engine
-        run: cmake --build build --target engine-legacy --parallel 3
+      - name: Build and install graphical engine without CI version bypass
+        run: env -u CI cmake --build build --target install-spring-legacy --parallel 3
+
+      - name: Assemble and sign the development app
+        run: |
+          app='build/Beyond All Reason GL41.app'
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources/BAR-content"
+          cp installer/Mac/bar-gl41-launcher.sh "$app/Contents/MacOS/Beyond All Reason GL41"
+          chmod +x "$app/Contents/MacOS/Beyond All Reason GL41"
+          cp installer/Mac/BAR-GL41-Info.plist "$app/Contents/Info.plist"
+          ditto bar-content "$app/Contents/Resources/BAR-content"
+          plutil -lint "$app/Contents/Info.plist"
+          codesign --force --deep --sign - "$app"
 
       - name: Create isolated smoke configuration
         run: |
@@ -134,16 +164,15 @@ jobs:
 
       - name: Run real engine startup and render smoke
         env:
-          SPRING_DATADIR: '${{ github.workspace }}/build:${{ github.workspace }}/cont:${{ github.workspace }}/bar-content'
+          BAR_WRITE_DIR: '${{ github.workspace }}/build/smoke-write'
+          BAR_CONFIG: '${{ github.workspace }}/build/gl41-smoke.cfg'
         run: |
           set -o pipefail
-          ./build/spring \
+          './build/Beyond All Reason GL41.app/Contents/MacOS/Beyond All Reason GL41' \
             --gl-smoke-test \
             --window \
             --isolation \
-            --isolation-dir="${{ github.workspace }}/build" \
-            --write-dir="${{ github.workspace }}/build/smoke-write" \
-            --config="${{ github.workspace }}/build/gl41-smoke.cfg" \
+            --isolation-dir="${{ github.workspace }}/build/Beyond All Reason GL41.app/Contents/Resources/runtime" \
             2>&1 | tee build/gl41-smoke.stdout.log
           grep -F '[GLSmoke] PASS context=4.1 Core' build/smoke-write/infolog.txt
 

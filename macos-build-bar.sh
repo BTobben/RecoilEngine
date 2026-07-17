@@ -4,6 +4,7 @@ set -euo pipefail
 
 ENGINE_URL="${BAR_ENGINE_URL:-https://github.com/BTobben/RecoilEngine.git}"
 ENGINE_REF="${BAR_ENGINE_REF:-agent/macos-gl41-ubo-content}"
+ENGINE_UPSTREAM_URL="${BAR_ENGINE_UPSTREAM_URL:-https://github.com/beyond-all-reason/RecoilEngine.git}"
 BAR_URL="${BAR_CONTENT_URL:-https://github.com/BTobben/Beyond-All-Reason.git}"
 BAR_REF="${BAR_CONTENT_REF:-agent/macos-gl41-ubo-content}"
 WORKSPACE="${BAR_MACOS_WORKSPACE:-$HOME/BAR-macOS-GL41}"
@@ -25,7 +26,7 @@ Build an experimental BAR OpenGL 4.1 app on macOS.
   -h, --help        Show this help.
 
 Environment overrides:
-  BAR_BUILD_JOBS, BAR_ENGINE_URL, BAR_ENGINE_REF,
+  BAR_BUILD_JOBS, BAR_ENGINE_URL, BAR_ENGINE_REF, BAR_ENGINE_UPSTREAM_URL,
   BAR_CONTENT_URL, BAR_CONTENT_REF, BAR_MACOS_WORKSPACE
 EOF
 }
@@ -132,13 +133,13 @@ prepare_engine() {
 	local script_root
 	script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
 
-	if [ -f "$script_root/CMakeLists.txt" ] && [ -d "$script_root/.git" ]; then
+	if [ -f "$script_root/CMakeLists.txt" ] && [ -e "$script_root/.git" ]; then
 		ENGINE_ROOT="$script_root"
 	else
 		ENGINE_ROOT="$WORKSPACE/RecoilEngine"
 	fi
 
-	if [ ! -d "$ENGINE_ROOT/.git" ]; then
+	if [ ! -e "$ENGINE_ROOT/.git" ]; then
 		log "Cloning RecoilEngine ($ENGINE_REF)"
 		git clone --branch "$ENGINE_REF" --single-branch "$ENGINE_URL" "$ENGINE_ROOT"
 	else
@@ -148,6 +149,15 @@ prepare_engine() {
 		git -C "$ENGINE_ROOT" checkout "$ENGINE_REF"
 		git -C "$ENGINE_ROOT" merge --ff-only "origin/$ENGINE_REF"
 	fi
+
+	log "Fetching upstream RecoilEngine version tags"
+	if [ "$(git -C "$ENGINE_ROOT" rev-parse --is-shallow-repository)" = "true" ]; then
+		git -C "$ENGINE_ROOT" fetch --unshallow --force --tags "$ENGINE_UPSTREAM_URL" master
+	else
+		git -C "$ENGINE_ROOT" fetch --force --tags "$ENGINE_UPSTREAM_URL" master
+	fi
+	git -C "$ENGINE_ROOT" describe --tags --match '[0-9]*' --long >/dev/null \
+		|| die "no numeric upstream RecoilEngine version tag is reachable from $ENGINE_REF"
 
 	git -C "$ENGINE_ROOT" submodule update --init --recursive
 }
@@ -213,39 +223,9 @@ write_app_bundle() {
 	launcher="$CONTENTS/MacOS/Beyond All Reason GL41"
 	plist="$CONTENTS/Info.plist"
 
-	cat > "$launcher" <<'EOF'
-#!/bin/bash
-set -e
-CONTENTS="$(cd "$(dirname "$0")/.." && pwd)"
-RESOURCES="$CONTENTS/Resources"
-RUNTIME="$RESOURCES/runtime"
-BAR="$RESOURCES/BAR-content"
-WRITE_DIR="$HOME/Library/Application Support/Beyond All Reason GL41"
-mkdir -p "$WRITE_DIR"
-export SPRING_DATADIR="$RUNTIME:$BAR"
-exec "$RUNTIME/spring" \
-	--write-dir="$WRITE_DIR" \
-	--config="$BAR/common/configs/macos-gl41.cfg" \
-	"$@"
-EOF
+	cp "$ENGINE_ROOT/installer/Mac/bar-gl41-launcher.sh" "$launcher"
 	chmod +x "$launcher"
-
-	cat > "$plist" <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>CFBundleDisplayName</key><string>Beyond All Reason GL41</string>
-	<key>CFBundleExecutable</key><string>Beyond All Reason GL41</string>
-	<key>CFBundleIdentifier</key><string>info.beyondallreason.gl41.experimental</string>
-	<key>CFBundleName</key><string>Beyond All Reason GL41</string>
-	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleShortVersionString</key><string>0.1-experimental</string>
-	<key>LSMinimumSystemVersion</key><string>11.0</string>
-	<key>NSHighResolutionCapable</key><true/>
-</dict>
-</plist>
-EOF
+	cp "$ENGINE_ROOT/installer/Mac/BAR-GL41-Info.plist" "$plist"
 
 	plutil -lint "$plist" >/dev/null
 	codesign --force --deep --sign - "$APP" >/dev/null
