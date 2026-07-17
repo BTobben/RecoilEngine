@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include <chrono>
+#include <cmath>
 #include <string_view>
 #include <fmt/printf.h>
 
@@ -488,4 +489,3 @@ void CModelLoader::Upload(S3DModel* model) const {
 
 	model->uploaded = true;
 }
-

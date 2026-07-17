@@ -2,10 +2,11 @@
 
 #include "AssParser.h"
 
-#include <regex>
 #include <algorithm>
+#include <cmath>
 #include <numeric>
 #include <optional>
+#include <regex>
 
 #include "3DModel.hpp"
 #include "3DModelDefs.hpp"
