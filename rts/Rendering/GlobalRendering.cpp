@@ -882,14 +882,23 @@ void CGlobalRendering::SetGLSupportFlags()
 	const std::string& glRenderer = StringToLower(globalRenderingInfo.glRenderer);
 	const std::string& glVersion = StringToLower(globalRenderingInfo.glVersion);
 
-	bool haveGLSL  = (glGetString(GL_SHADING_LANGUAGE_VERSION) != nullptr);
-	haveGLSL &= static_cast<bool>(GLAD_GL_ARB_vertex_shader && GLAD_GL_ARB_fragment_shader);
-	haveGLSL &= static_cast<bool>(GLAD_GL_VERSION_2_0); // we want OpenGL 2.0 core functions
+	bool haveGLSL = (glGetString(GL_SHADING_LANGUAGE_VERSION) != nullptr);
+	// Core contexts do not have to advertise extension names for features that
+	// were promoted into the OpenGL specification. Shaders are core since 2.0.
+	haveGLSL &= static_cast<bool>(
+		GLAD_GL_VERSION_2_0 ||
+		(GLAD_GL_ARB_vertex_shader && GLAD_GL_ARB_fragment_shader)
+	);
 	haveGLSL |= underExternalDebug;
 
 	#ifndef HEADLESS
-	if (!haveGLSL)
+	if (!haveGLSL) {
+		LOG_L(L_ERROR,
+			"[GR::%s] shader support check failed (GL2=%d, ARB_vertex=%d, ARB_fragment=%d)",
+			__func__, GLAD_GL_VERSION_2_0, GLAD_GL_ARB_vertex_shader, GLAD_GL_ARB_fragment_shader
+		);
 		throw unsupported_error("OpenGL shaders not supported, aborting");
+	}
 	#endif
 
 	haveAMD    = (  glVendor.find(   "ati ") != std::string::npos) || (  glVendor.find("amd ") != std::string::npos) ||
@@ -1086,7 +1095,7 @@ void CGlobalRendering::QueryVersionInfo(char (&sdlVersionStr)[64], char (&glVidM
 	// should never be null with any driver, no harm in an extra check
 	// (absence of GLSL version string would indicate bigger problems)
 	if (std::strcmp(globalRenderingInfo.glslVersion, "unknown") == 0)
-		throw unsupported_error("OpenGL shaders not supported, aborting");
+		throw unsupported_error("OpenGL shading-language version unavailable, aborting");
 
 	if (!ShowDriverWarning(grInfo.glVendor))
 		throw unsupported_error("OpenGL drivers not installed, aborting");
