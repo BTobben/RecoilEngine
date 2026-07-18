@@ -7,7 +7,11 @@
 
 #include "GuiElement.h"
 #include "Rendering/GlobalRendering.h"
+#include "Rendering/GlobalRenderingInfo.h"
+#include "Rendering/GL/RenderBuffers.h"
 #include "Rendering/GL/myGL.h"
+#include "Rendering/Shaders/Shader.h"
+#include "System/Matrix44f.h"
 #include "System/Log/ILog.h"
 
 
@@ -26,14 +30,29 @@ void Gui::Draw()
 {
 	Clean();
 
-	glDisable(GL_TEXTURE_2D);
-	glDisable(GL_ALPHA_TEST);
+	if (globalRenderingInfo.glContextIsCore) {
+		const CMatrix44f transform = CMatrix44f::ClipOrthoProj01();
+
+		auto& colorShader = RenderBuffer::GetTypedRenderBuffer<VA_TYPE_2DC>().GetShader();
+		colorShader.Enable();
+		colorShader.SetUniformMatrix4x4("transformMatrix", false, transform.m);
+		colorShader.Disable();
+
+		auto& textureShader = RenderBuffer::GetTypedRenderBuffer<VA_TYPE_2DTC>().GetShader();
+		textureShader.Enable();
+		textureShader.SetUniformMatrix4x4("transformMatrix", false, transform.m);
+		textureShader.Disable();
+	} else {
+		glDisable(GL_TEXTURE_2D);
+		glDisable(GL_ALPHA_TEST);
+		glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		gluOrtho2D(0, 1, 0, 1);
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+	}
+
 	glEnable(GL_BLEND);
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	gluOrtho2D(0, 1, 0, 1);
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
 	for (ElList::reverse_iterator it = elements.rbegin(); it != elements.rend(); ++it) {
 		(*it).element->Draw();
 	}
@@ -140,4 +159,3 @@ bool Gui::HandleEvent(const SDL_Event& ev)
 Gui* gui = nullptr;
 
 }
-

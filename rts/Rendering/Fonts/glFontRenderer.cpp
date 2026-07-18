@@ -301,9 +301,18 @@ void CglShaderFontRenderer::PushGLState(const CglFont& fnt)
 
 	if (fnt.HasColor()) {
 		fontShaderColor->Enable();
+		if (globalRenderingInfo.glContextIsCore) {
+			const CMatrix44f transform = fnt.GetProjMatrix() * fnt.GetViewMatrix();
+			fontShaderColor->SetUniformMatrix4x4("transformMatrix", false, transform.m);
+		}
 	}
 	else
 		fontShader->Enable();
+
+	if (!fnt.HasColor() && globalRenderingInfo.glContextIsCore) {
+		const CMatrix44f transform = fnt.GetProjMatrix() * fnt.GetViewMatrix();
+		fontShader->SetUniformMatrix4x4("transformMatrix", false, transform.m);
+	}
 }
 
 void CglShaderFontRenderer::PopGLState(const CglFont& fnt)

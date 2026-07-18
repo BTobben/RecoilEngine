@@ -65,6 +65,11 @@ state restoration. A pass is recorded in:
 ~/BAR-macOS-GL41/smoke-write/infolog.txt
 ```
 
+The packaged GL 4.1 configuration also enables a deduplicated driver report
+named `gl_compatibility_report.txt` in the application's active write
+directory. Send that small file together with `infolog.txt` when diagnosing
+missing or invalid OpenGL calls.
+
 This is still an experimental port. Passing the bounded startup test does not
 prove that every BAR widget, map, unit shader, sound path, or complete match is
 working.

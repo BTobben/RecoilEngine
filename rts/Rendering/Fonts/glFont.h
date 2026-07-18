@@ -66,6 +66,8 @@ public:
 
 	void SetViewMatrix(const CMatrix44f& mat) { viewMatrix = mat; }
 	void SetProjMatrix(const CMatrix44f& mat) { projMatrix = mat; }
+	const CMatrix44f& GetViewMatrix() const { return viewMatrix; }
+	const CMatrix44f& GetProjMatrix() const { return projMatrix; }
 
 	static CMatrix44f DefViewMatrix();
 	static CMatrix44f DefProjMatrix();

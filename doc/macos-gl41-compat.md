@@ -70,20 +70,21 @@ does not call `glShadeModel` in a Core context, and avoids removed Core-profile
 limit queries. The splash renderer also skips the obsolete texture-target
 enable while retaining its shader texture binding.
 
-The buffered startup and font shaders select GLSL 4.10 Core sources instead
-of compatibility-profile built-ins. Their transitional Core transform is an
-identity uniform, which is correct for the normalized splash path and keeps
-startup testable. It is not a replacement for the remaining world/UI matrix
-stack migration.
+The buffered startup, aGui, and font shaders select GLSL 4.10 Core sources
+instead of compatibility-profile built-ins. aGui now uploads an explicit
+normalized orthographic transform and the font renderer uploads the font's
+view/projection transform. This keeps the menu independent of the removed
+fixed-function matrix stack in a Core context.
 
 ## Known limitations
 
-This foundation does **not** yet make the graphical engine playable on macOS.
-The attribute stack has a Core-safe implementation, but the engine and Lua
-drawing API still contain compatibility-profile operations such as
+The engine and BAR content can now reach the menu and a playable match on the
+tested Linux GL 4.1 path. This remains an experimental compatibility tier,
+not a claim that every map, widget, or optional effect works on macOS. The Lua
+drawing API still contains compatibility-profile operations such as
 immediate-mode drawing, matrix stacks, alpha test, and client-state vertex
-arrays. Those entry points are removed from a 4.1 Core context and must be
-migrated to the existing buffered/shader drawing helpers.
+arrays. Code reached by the 4.1 tier must continue to migrate to the existing
+buffered/shader drawing helpers.
 
 Additional work remains outside this capability layer:
 
@@ -92,6 +93,10 @@ Additional work remains outside this capability layer:
 - complete and continuously test the native macOS dependency/build pipeline;
 - package, sign, and notarize an application bundle;
 - prove replay and multiplayer determinism across x86-64 and ARM64.
+- investigate map-specific texture warnings and validate representative
+  grass, water, sky, void-ground, and map-edge configurations;
+- replace or permanently capability-gate deferred rendering, SSAO,
+  distortion, and other optional effects unavailable to the GL 4.1 tier.
 
 The current ARM64/NEON build support is separate from renderer compatibility.
 Compiling on ARM64 is not proof of cross-architecture lockstep parity.
@@ -118,6 +123,33 @@ A Linux build verifies that the existing GL4.3 path still compiles. Runtime
 validation should cover both the normal configuration and
 `ForceDisableGL4=1`. The macOS smoke job provides a repeatable Core 4.1 gate;
 full menu, game, and BAR widget coverage remains a separate milestone.
+
+## Focused compatibility diagnostics
+
+Set the following in `springsettings.cfg` to collect driver diagnostics
+without duplicating the full terminal output:
+
+```text
+DebugGL=1
+DebugGLUniqueOnly=1
+DebugGLLogToInfolog=0
+DebugGLCompatibilityReport=1
+DebugGLStacktraces=0
+```
+
+The engine writes `gl_compatibility_report.txt` in its active write directory.
+Every distinct OpenGL callback message is written once and flushed
+immediately, so the file also remains useful after a crash. `infolog.txt`
+continues to contain engine and Lua capability messages; the focused report
+is specifically for OpenGL driver/API diagnostics.
+
+## Renderer preference
+
+`RenderingBackend` currently accepts `auto` or `opengl`.
+`OpenGLFeatureLevel` accepts `auto`, `full`, or `gl41`; changing either takes
+effect on restart. BAR exposes these as one rendering-mode selector. Vulkan
+is intentionally not advertised until an engine backend exists, but it can
+later be added without redefining the OpenGL compatibility tier.
 
 ## Long-term direction
 
