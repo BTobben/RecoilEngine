@@ -295,7 +295,25 @@ void CglShaderFontRenderer::PushGLState(const CglFont& fnt)
 	if (!userDefinedBlending)
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+	// The font shaders always sample from texture unit zero.  Do not rely on the
+	// caller leaving that unit active: strict core-profile drivers (notably the
+	// Intel macOS OpenGL driver) commonly leave another unit selected while the
+	// menu is drawn, which made every glyph sample transparent texels.
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &previousActiveTexture);
+	glActiveTexture(GL_TEXTURE0);
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousTexture2D);
 	glBindTexture(GL_TEXTURE_2D, fnt.GetTexture());
+
+	static bool loggedFontTextureState = false;
+	if (!loggedFontTextureState) {
+		GLint textureWidth = 0;
+		GLint textureHeight = 0;
+		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &textureWidth);
+		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &textureHeight);
+		LOG("[GL-Font] sampler=0 atlas=%u size=%dx%d previousActiveTexture=%d",
+			fnt.GetTexture(), textureWidth, textureHeight, previousActiveTexture - GL_TEXTURE0);
+		loggedFontTextureState = true;
+	}
 
 	glGetIntegerv(GL_CURRENT_PROGRAM, &currProgID);
 
@@ -326,7 +344,9 @@ void CglShaderFontRenderer::PopGLState(const CglFont& fnt)
 	if (currProgID > 0)
 		glUseProgram(currProgID);
 
-	glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, previousTexture2D);
+	glActiveTexture(previousActiveTexture);
 
 	glPopAttrib();
 }
@@ -398,121 +418,3 @@ void CglNoShaderFontRenderer::AddQuadTrianglesOB(VA_TYPE_TC&& tl, VA_TYPE_TC&& t
 {
 	RECOIL_DETAILED_TRACY_ZONE;
 	AddQuadTrianglesImpl(false, std::move(tl), std::move(tr), std::move(br), std::move(bl));
-}
-
-void CglNoShaderFontRenderer::DrawTraingleElements()
-{
-	RECOIL_DETAILED_TRACY_ZONE;
-	static constexpr GLsizei stride = sizeof(VA_TYPE_TC);
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-	for (size_t idx = 0; idx < 2; ++idx) {
-		glVertexPointer(3, GL_FLOAT, stride, &verts[idx].data()->pos);
-		glTexCoordPointer(2, GL_FLOAT, stride, &verts[idx].data()->s);
-		glColorPointer(4, GL_UNSIGNED_BYTE, stride, &verts[idx].data()->c.r);
-		glDrawRangeElements(GL_TRIANGLES, 0, verts[idx].size() - 1, indcs[idx].size(), GL_UNSIGNED_SHORT, indcs[idx].data());
-	};
-
-	for (auto& v : verts)
-		v.clear();
-	for (auto& i : indcs)
-		i.clear();
-}
-
-void CglNoShaderFontRenderer::HandleTextureUpdate(CFontTexture& fnt, bool onlyUpload)
-{
-	RECOIL_DETAILED_TRACY_ZONE;
-	if (!onlyUpload)
-		fnt.UpdateGlyphAtlasTexture();
-
-	GLint dl = 0;
-	glGetIntegerv(GL_LIST_INDEX, &dl);
-	if (dl == 0) {
-		fnt.UploadGlyphAtlasTextureImpl();
-
-		// update texture space dlist (this affects already compiled dlists too!)
-		glNewList(textureSpaceMatrix, GL_COMPILE);
-		glScalef(1.0f / fnt.GetTextureWidth(), 1.0f / fnt.GetTextureHeight(), 1.0f);
-		glEndList();
-	}
-}
-
-void CglNoShaderFontRenderer::PushGLState(const CglFont& fnt)
-{
-	RECOIL_DETAILED_TRACY_ZONE;
-	glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT);
-	glDisable(GL_LIGHTING);
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_ALPHA_TEST);
-	glEnable(GL_BLEND);
-	if (!userDefinedBlending)
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_TEXTURE_2D);
-
-	glMatrixMode(GL_TEXTURE);
-	glPushMatrix();
-	glCallList(textureSpaceMatrix);
-
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-	glEnableClientState(GL_COLOR_ARRAY);
-
-	glBindTexture(GL_TEXTURE_2D, fnt.GetTexture());
-}
-
-void CglNoShaderFontRenderer::PopGLState(const CglFont& fnt)
-{
-	RECOIL_DETAILED_TRACY_ZONE;
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	glDisableClientState(GL_COLOR_ARRAY);
-
-	glPopMatrix();
-	glMatrixMode(GL_MODELVIEW);
-
-	glDisable(GL_TEXTURE_2D);
-	glPopAttrib();
-}
-
-void CglNoShaderFontRenderer::GetStats(std::array<size_t, 8>& stats) const
-{
-	RECOIL_DETAILED_TRACY_ZONE;
-	/// placeholder
-	std::fill(stats.begin(), stats.end(), 0);
-}
-
-
-std::unique_ptr<CglFontRenderer> CglFontRenderer::CreateInstance()
-{
-	RECOIL_DETAILED_TRACY_ZONE;
-#ifndef HEADLESS
-	//return std::make_unique<CglNoShaderFontRenderer>();
-	if (globalRendering->amdHacks)
-		return std::make_unique<CglNoShaderFontRenderer>();
-
-	auto fr = std::make_unique<CglShaderFontRenderer>();
-	if (fr->IsValid())
-		return fr;
-
-	fr = nullptr;
-	return std::make_unique<CglNoShaderFontRenderer>();
-#else
-	return std::make_unique<CglNullFontRenderer>();
-#endif
-}
-
-void CglFontRenderer::DeleteInstance(std::unique_ptr<CglFontRenderer>& instance)
-{
-	RECOIL_DETAILED_TRACY_ZONE;
-	instance = nullptr;
-}
-
-void CglNullFontRenderer::GetStats(std::array<size_t, 8>& stats) const
-{
-	RECOIL_DETAILED_TRACY_ZONE;
-	std::fill(stats.begin(), stats.end(), 0u);
-}

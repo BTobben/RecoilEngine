@@ -57,6 +57,8 @@ public:
 private:
 	TypedRenderBuffer<VA_TYPE_TC> primaryBufferTC;
 	TypedRenderBuffer<VA_TYPE_TC> outlineBufferTC;
+	GLint previousActiveTexture = GL_TEXTURE0;
+	GLint previousTexture2D = 0;
 
 	static inline size_t fontShaderRefs = 0;
 	static inline std::unique_ptr<Shader::IProgramObject> fontShader = nullptr;
