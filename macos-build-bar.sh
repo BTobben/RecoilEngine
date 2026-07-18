@@ -131,7 +131,12 @@ repo_is_clean() {
 
 prepare_engine() {
 	local script_root
-	script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
+	if [ -n "${BASH_SOURCE[0]:-}" ]; then
+		script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
+	else
+		# BASH_SOURCE is unset when this script is executed through `curl | bash`.
+		script_root=""
+	fi
 
 	if [ -f "$script_root/CMakeLists.txt" ] && [ -e "$script_root/.git" ]; then
 		ENGINE_ROOT="$script_root"
@@ -143,6 +148,14 @@ prepare_engine() {
 		log "Cloning RecoilEngine ($ENGINE_REF)"
 		git clone --branch "$ENGINE_REF" --single-branch "$ENGINE_URL" "$ENGINE_ROOT"
 	else
+		# Keep the checkout reusable when our temporary Intel-macOS pr-downloader
+		# compatibility patch was left applied by an earlier build.
+		if [ -e "$ENGINE_ROOT/tools/pr-downloader/.git" ] && \
+			git -C "$ENGINE_ROOT/tools/pr-downloader" apply --reverse --check \
+				"$ENGINE_ROOT/installer/Mac/pr-downloader-macos-x64.patch" >/dev/null 2>&1; then
+			git -C "$ENGINE_ROOT/tools/pr-downloader" apply --reverse \
+				"$ENGINE_ROOT/installer/Mac/pr-downloader-macos-x64.patch"
+		fi
 		repo_is_clean "$ENGINE_ROOT" || die "RecoilEngine has local changes: $ENGINE_ROOT"
 		log "Updating RecoilEngine ($ENGINE_REF)"
 		git -C "$ENGINE_ROOT" fetch origin "$ENGINE_REF"
@@ -160,6 +173,16 @@ prepare_engine() {
 		|| die "no numeric upstream RecoilEngine version tag is reachable from $ENGINE_REF"
 
 	git -C "$ENGINE_ROOT" submodule update --init --recursive
+
+	# The pinned upstream downloader currently identifies Apple Silicon only.
+	# Apply the small x86_64 platform addition until that change is available in
+	# the submodule itself; this keeps Intel macOS builds correctly labelled.
+	if [ "$(uname -s)" = "Darwin" ] && [ "$(uname -m)" = "x86_64" ]; then
+		git -C "$ENGINE_ROOT/tools/pr-downloader" apply --check \
+			"$ENGINE_ROOT/installer/Mac/pr-downloader-macos-x64.patch"
+		git -C "$ENGINE_ROOT/tools/pr-downloader" apply \
+			"$ENGINE_ROOT/installer/Mac/pr-downloader-macos-x64.patch"
+	fi
 }
 
 prepare_bar_content() {
