@@ -2145,6 +2145,21 @@ public:
 		if (report.is_open()) {
 			report << "Recoil OpenGL compatibility report\n";
 			report << "Each distinct driver message is recorded once per run.\n\n";
+			report << "context.version=" << globalRenderingInfo.glVersion << "\n";
+			report << "context.glsl=" << globalRenderingInfo.glslVersion << "\n";
+			report << "context.vendor=" << globalRenderingInfo.gpuVendor << "\n";
+			report << "context.renderer=" << globalRenderingInfo.gpuName << "\n";
+			if (globalRendering != nullptr) {
+				report << "capability.gl41_core=" << globalRendering->supportGL41Core << "\n";
+				report << "capability.uniform_buffers=" << globalRendering->supportUniformBuffers << "\n";
+				report << "capability.glsl_420pack=" << globalRendering->supportGLSL420Pack << "\n";
+				report << "capability.compute_shaders=" << globalRendering->supportComputeShaders << "\n";
+				report << "capability.shader_storage_buffers=" << globalRendering->supportShaderStorageBuffers << "\n";
+				report << "capability.image_load_store=" << globalRendering->supportImageLoadStore << "\n";
+				report << "capability.atomic_counter_buffers=" << globalRendering->supportAtomicCounterBuffers << "\n";
+				report << "capability.multi_draw_indirect=" << globalRendering->supportMultiDrawIndirect << "\n";
+			}
+			report << "\n";
 			report.flush();
 		}
 	}
