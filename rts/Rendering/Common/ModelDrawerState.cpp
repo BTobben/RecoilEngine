@@ -211,7 +211,7 @@ void CModelDrawerStateGLSL::Enable(bool deferredPass, bool alphaPass) const
 	modelShader->SetUniformMatrix4x4("shadowMatrix", false, shadowHandler.GetShadowMatrixRaw());
 	modelShader->SetUniformMatrix4x4("coreViewProjectionMatrix", false, GL::Legacy::ProjectionMatrix().m);
 
-	const ISky* sky = ISky::GetSky();
+	const ISky* sky = ISky::GetSky().get();
 	const float fogStart = sky->fogStart * camera->GetFarPlaneDist();
 	const float fogEnd = sky->fogEnd * camera->GetFarPlaneDist();
 	const float fogScale = 1.0f / std::max(fogEnd - fogStart, 1.0f);
