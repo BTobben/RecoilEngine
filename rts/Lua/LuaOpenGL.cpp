@@ -45,6 +45,7 @@
 #include "Map/ReadMap.h"
 #include "Rendering/Fonts/glFont.h"
 #include "Rendering/GlobalRendering.h"
+#include "Rendering/GlobalRenderingInfo.h"
 #include "Rendering/LineDrawer.h"
 #include "Rendering/ShadowHandler.h"
 #include "Rendering/LuaObjectDrawer.h"
@@ -57,6 +58,7 @@
 #include "Rendering/Env/WaterRendering.h"
 #include "Rendering/Env/MapRendering.h"
 #include "Rendering/GL/glExtra.h"
+#include "Rendering/GL/RenderBuffers.h"
 #include "Rendering/GL/TexBind.h"
 #include "Rendering/Models/3DModelMisc.hpp"
 #include "Rendering/Models/3DModelPiece.hpp"
@@ -2872,11 +2874,12 @@ int LuaOpenGL::TexRect(lua_State* L)
 	// Spring's textures get loaded with a vertical flip
 	// We change that for the default settings.
 
+	float s1 = 0.0f;
+	float t1 = 1.0f;
+	float s2 = 1.0f;
+	float t2 = 0.0f;
+
 	if (args <= 6) {
-		float s1 = 0.0f;
-		float t1 = 1.0f;
-		float s2 = 1.0f;
-		float t2 = 0.0f;
 		if ((args >= 5) && luaL_optboolean(L, 5, false)) {
 			// flip s-coords
 			s1 = 1.0f;
@@ -2887,20 +2890,32 @@ int LuaOpenGL::TexRect(lua_State* L)
 			t1 = 0.0f;
 			t2 = 1.0f;
 		}
-		glBegin(GL_QUADS); {
-			glTexCoord2f(s1, t1); glVertex2f(x1, y1);
-			glTexCoord2f(s2, t1); glVertex2f(x2, y1);
-			glTexCoord2f(s2, t2); glVertex2f(x2, y2);
-			glTexCoord2f(s1, t2); glVertex2f(x1, y2);
-		}
-		glEnd();
+	} else {
+		s1 = luaL_checkfloat(L, 5);
+		t1 = luaL_checkfloat(L, 6);
+		s2 = luaL_checkfloat(L, 7);
+		t2 = luaL_checkfloat(L, 8);
+	}
+
+	if (globalRenderingInfo.glContextIsCore) {
+		auto& rb = RenderBuffer::GetTypedRenderBuffer<VA_TYPE_2DTC>();
+		auto& shader = rb.GetShader();
+		const SColor drawColor(color.data());
+
+		rb.AssertSubmission();
+		rb.AddQuadTriangles(
+			{ x1, y1, s1, t1, drawColor },
+			{ x2, y1, s2, t1, drawColor },
+			{ x2, y2, s2, t2, drawColor },
+			{ x1, y2, s1, t2, drawColor }
+		);
+
+		shader.Enable();
+		rb.DrawElements(GL_TRIANGLES);
+		shader.Disable();
 		return 0;
 	}
 
-	const float s1 = luaL_checkfloat(L, 5);
-	const float t1 = luaL_checkfloat(L, 6);
-	const float s2 = luaL_checkfloat(L, 7);
-	const float t2 = luaL_checkfloat(L, 8);
 	glBegin(GL_QUADS); {
 		glTexCoord2f(s1, t1); glVertex2f(x1, y1);
 		glTexCoord2f(s2, t1); glVertex2f(x2, y1);
