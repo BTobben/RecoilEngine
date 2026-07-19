@@ -112,6 +112,7 @@ void DebugCubeMapTexture::Draw(uint32_t face) const
 	vao.Bind();
 	assert(shader->IsValid());
 	shader->Enable();
+	shader->SetUniformMatrix4x4("coreViewProjectionMatrix", false, GL::Legacy::ModelViewProjectionMatrix().m);
 
 	glDrawArrays(GL_TRIANGLES, baseVertex, vertCount);
 

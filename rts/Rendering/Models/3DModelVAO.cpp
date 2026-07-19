@@ -9,6 +9,7 @@
 #include "3DModelPiece.hpp"
 #include "IModelParser.h"
 #include "Rendering/ModelsDataUploader.h"
+#include "Rendering/GlobalRenderingInfo.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
 #include "Sim/Features/Feature.h"
@@ -153,7 +154,8 @@ void S3DModelVAO::CreateVAO()
 	EnableAttribs(true); // instance attribs
 
 	vao.Unbind();
-	DisableAttribs();
+	if (!globalRenderingInfo.glContextIsCore)
+		DisableAttribs();
 
 	indxVBO.Unbind();
 	instVBO.Unbind();
@@ -232,6 +234,11 @@ void S3DModelVAO::Unbind() const
 void S3DModelVAO::BindLegacyVertexAttribsAndVBOs() const
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	if (globalRenderingInfo.glContextIsCore) {
+		vao.Bind();
+		return;
+	}
+
 	vertVBO.Bind();
 	indxVBO.Bind();
 
@@ -261,6 +268,11 @@ void S3DModelVAO::BindLegacyVertexAttribsAndVBOs() const
 void S3DModelVAO::UnbindLegacyVertexAttribsAndVBOs() const
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	if (globalRenderingInfo.glContextIsCore) {
+		vao.Unbind();
+		return;
+	}
+
 	glClientActiveTexture(GL_TEXTURE6);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
@@ -283,6 +295,17 @@ void S3DModelVAO::UnbindLegacyVertexAttribsAndVBOs() const
 void S3DModelVAO::DrawElements(GLenum prim, uint32_t vboIndxStart, uint32_t vboIndxCount) const
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	if (globalRenderingInfo.glContextIsCore) {
+		GLint program = 0;
+		glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+
+		if (program != 0) {
+			const GLint modelLoc = glGetUniformLocation(program, "coreModelMatrix");
+			if (modelLoc >= 0)
+				glUniformMatrix4fv(modelLoc, 1, false, GL::Legacy::ModelViewMatrix().m);
+		}
+	}
+
 	glDrawElements(prim, vboIndxCount, GL_UNSIGNED_INT, indxVBO.GetPtr(vboIndxStart * sizeof(uint32_t)));
 }
 

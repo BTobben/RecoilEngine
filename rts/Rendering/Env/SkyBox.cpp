@@ -134,6 +134,7 @@ void CSkyBox::Init(uint32_t textureID, uint32_t xsize, uint32_t ysize, bool conv
 					viewMatParams[side].second
 				);
 				glLoadMatrixf(viewMat);
+				ercShader->SetUniformMatrix4x4("coreViewProjectionMatrix", false, GL::Legacy::ModelViewProjectionMatrix().m);
 
 				glDrawBuffer(GL_COLOR_ATTACHMENT0);
 
@@ -256,6 +257,7 @@ void CSkyBox::Draw()
 	skyVAO.Bind();
 	assert(shader->IsValid());
 	shader->Enable();
+	shader->SetUniformMatrix4x4("coreViewProjectionMatrix", false, GL::Legacy::ModelViewProjectionMatrix().m);
 
 	shader->SetUniform("planeColor",
 		waterRendering->planeColor.x,

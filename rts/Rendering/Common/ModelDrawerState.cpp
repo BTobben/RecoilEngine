@@ -1,6 +1,8 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "ModelDrawerState.hpp"
+#include <algorithm>
+
 #include "ModelDrawer.h"
 #include "Game/Camera.h"
 #include "Game/Game.h"
@@ -201,11 +203,20 @@ void CModelDrawerStateGLSL::Enable(bool deferredPass, bool alphaPass) const
 	// end of EnableCommon();
 
 	modelShader->SetUniform3v("sunDir", &ISky::GetSky()->GetLight()->GetLightDir().x);
+	modelShader->SetUniform3v("cameraPos", &camera->GetPos()[0]);
 	modelShader->SetUniform3v("sunAmbient", &sunLighting->modelAmbientColor[0]);
 	modelShader->SetUniform3v("sunDiffuse", &sunLighting->modelDiffuseColor[0]);
 	modelShader->SetUniform3v("sunSpecular", &sunLighting->modelSpecularColor[0]);
 	modelShader->SetUniform("shadowDensity", sunLighting->modelShadowDensity);
 	modelShader->SetUniformMatrix4x4("shadowMatrix", false, shadowHandler.GetShadowMatrixRaw());
+	modelShader->SetUniformMatrix4x4("coreViewProjectionMatrix", false, GL::Legacy::ProjectionMatrix().m);
+
+	const ISky* sky = ISky::GetSky();
+	const float fogStart = sky->fogStart * camera->GetFarPlaneDist();
+	const float fogEnd = sky->fogEnd * camera->GetFarPlaneDist();
+	const float fogScale = 1.0f / std::max(fogEnd - fogStart, 1.0f);
+	modelShader->SetUniform("coreFogParams", fogEnd, fogScale);
+	modelShader->SetUniform3v("coreFogColor", &sky->fogColor.x);
 
 	CModelDrawerConcept::GetLightHandler()->Update(modelShader);
 }

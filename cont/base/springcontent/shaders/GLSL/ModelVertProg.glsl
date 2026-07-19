@@ -1,41 +1,44 @@
-#version 120
+#version 410 core
 
-// note: gl_ModelViewMatrix actually only contains the
-// model matrix, view matrix is on the projection stack
+// The legacy model renderer keeps the view transform on the projection
+// stack and the per-piece transform on the model-view stack.  Core profiles
+// have neither stack, so the draw path supplies their emulated values here.
+layout(location = 0) in vec3 vertexPos;
+layout(location = 1) in vec3 vertexNormal;
+layout(location = 4) in vec4 vertexTexCoords;
 
-varying vec4 vertexWorldPos;
-varying vec3 cameraDir;
-varying float fogFactor;
-varying vec3 normalv;
+uniform mat4 coreModelMatrix;
+uniform mat4 coreViewProjectionMatrix;
+uniform vec3 cameraPos;
+uniform vec2 coreFogParams; // fog end, fog scale
+
+out vec4 vertexWorldPos;
+out vec3 cameraDir;
+out float fogFactor;
+out vec3 normalv;
+out vec2 texCoord0;
 
 #if (USE_SHADOWS == 1)
 	uniform mat4 shadowMatrix;
-	varying vec4 shadowVertexPos;
+	out vec4 shadowVertexPos;
 #endif
 
 void main(void)
 {
-	normalv = gl_NormalMatrix * gl_Normal;
-
-	gl_ClipVertex  = gl_ModelViewMatrix * gl_Vertex; // M (!)
-	gl_Position    = gl_ProjectionMatrix * gl_ClipVertex;
-
-	vertexWorldPos = gl_ClipVertex;
-
-	vec4 cameraPos = gl_ProjectionMatrixInverse * vec4(0, 0, 0, 1); cameraPos.xyz /= cameraPos.w;
-
-	cameraDir      = vertexWorldPos.xyz - cameraPos.xyz;
+	vertexWorldPos = coreModelMatrix * vec4(vertexPos, 1.0);
+	normalv = mat3(transpose(inverse(coreModelMatrix))) * vertexNormal;
+	gl_Position = coreViewProjectionMatrix * vertexWorldPos;
+	cameraDir = vertexWorldPos.xyz - cameraPos;
 
 #if (USE_SHADOWS == 1)
 	shadowVertexPos = shadowMatrix * vertexWorldPos;
 	shadowVertexPos.xy += vec2(0.5);
 #endif
 
-	gl_TexCoord[0].st = gl_MultiTexCoord0.st;
+	texCoord0 = vertexTexCoords.xy;
 
 #if (DEFERRED_MODE == 0)
-	float fogCoord = length(cameraDir.xyz);
-	fogFactor = (gl_Fog.end - fogCoord) * gl_Fog.scale; //gl_Fog.scale := 1.0 / (gl_Fog.end - gl_Fog.start)
-	fogFactor = clamp(fogFactor, 0.0, 1.0);
+	float fogCoord = length(cameraDir);
+	fogFactor = clamp((coreFogParams.x - fogCoord) * coreFogParams.y, 0.0, 1.0);
 #endif
 }
