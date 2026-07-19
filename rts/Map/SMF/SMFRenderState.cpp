@@ -260,6 +260,11 @@ void SMFRenderStateGLSL::Enable(const CSMFGroundDrawer* smfGroundDrawer, const D
 	currShader->SetFlag("HAVE_INFOTEX", infoTextureHandler->IsEnabled());
 
 	currShader->Enable();
+	currShader->SetUniformMatrix4x4("coreViewMatrix", false, camera->GetViewMatrix().m);
+	currShader->SetUniformMatrix4x4("coreViewProjectionMatrix", false, camera->GetViewProjectionMatrix().m);
+	currShader->SetUniform3v("cameraPos", &camera->GetPos()[0]);
+	currShader->SetUniform("coreFogParams", ISky::GetSky()->fogEnd * camera->GetFarPlaneDist(), 1.0f / ((ISky::GetSky()->fogEnd - ISky::GetSky()->fogStart) * camera->GetFarPlaneDist()));
+	currShader->SetUniform3v("coreFogColor", &ISky::GetSky()->fogColor[0]);
 	currShader->SetUniform("mapHeights", readMap->GetCurrMinHeight(), readMap->GetCurrMaxHeight());
 	currShader->SetUniform("infoTexIntensityMul", float(infoTextureHandler->InMetalMode()) + 1.0f);
 

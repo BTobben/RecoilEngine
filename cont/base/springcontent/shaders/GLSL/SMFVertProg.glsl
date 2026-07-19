@@ -1,4 +1,4 @@
-#version 130
+#version 410 core
 
 in vec3 vertexPos;
 
@@ -7,6 +7,9 @@ uniform vec3 cameraPos;
 uniform vec4 lightDir;       // mapInfo->light.sunDir
 uniform vec2 specularTexGen; // 1.0/mapSize
 uniform sampler2D heightMapTex;
+uniform mat4 coreViewMatrix;
+uniform mat4 coreViewProjectionMatrix;
+uniform vec2 coreFogParams; // end, scale
 
 out vec3 halfDir;
 out float fogFactor;
@@ -31,7 +34,7 @@ float HeightAtWorldPos(vec2 wxz){
 
 void main() {
 	// calc some lighting variables
-	vec3 viewDir = vec3(gl_ModelViewMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0));
+	vec3 viewDir = cameraPos;
 
 	vertexWorldPos = vec4(vertexPos, 1.0);
 	vertexWorldPos.xz += vec2(texSquare) * SMF_TEXSQR_SIZE;
@@ -44,14 +47,13 @@ void main() {
 	diffuseTexCoords = (vertexWorldPos.xz / SMF_TEXSQR_SIZE) - vec2(texSquare);
 
 	// transform vertex pos
-	gl_Position = gl_ModelViewProjectionMatrix * vertexWorldPos;
-	gl_ClipVertex = gl_ModelViewMatrix * vertexWorldPos;
+	gl_Position = coreViewProjectionMatrix * vertexWorldPos;
+	vec4 vertexViewPos = coreViewMatrix * vertexWorldPos;
 
 #ifndef DEFERRED_MODE
 	// emulate linear fog
-	float fogCoord = length(gl_ClipVertex.xyz);
-	fogFactor = (gl_Fog.end - fogCoord) * gl_Fog.scale; // gl_Fog.scale == 1.0 / (gl_Fog.end - gl_Fog.start)
+	float fogCoord = length(vertexViewPos.xyz);
+	fogFactor = (coreFogParams.x - fogCoord) * coreFogParams.y;
 	fogFactor = clamp(fogFactor, 0.0, 1.0);
 #endif
 }
-

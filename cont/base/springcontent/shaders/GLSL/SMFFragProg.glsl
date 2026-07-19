@@ -1,4 +1,4 @@
-#version 130
+#version 410 core
 
 #ifdef NOSPRING
 	#define SMF_INTENSITY_MULT (210.0 / 255.0)
@@ -8,13 +8,6 @@
 	#define GBUFFER_SPECTEX_IDX 2
 	#define GBUFFER_EMITTEX_IDX 3
 	#define GBUFFER_MISCTEX_IDX 4
-#endif
-
-#if (GL_FRAGMENT_PRECISION_HIGH == 1)
-// ancient GL3 ATI drivers confuse GLSL for GLSL-ES and require this
-precision highp float;
-#else
-precision mediump float;
 #endif
 
 /***********************************************************************/
@@ -60,6 +53,7 @@ uniform vec2 specularTexGen; // 1.0/mapSize
 uniform sampler2D infoTex;
 uniform float infoTexIntensityMul;
 uniform vec2 infoTexGen;     // 1.0/(pwr2map{x,z} * SQUARE_SIZE)
+uniform vec3 coreFogColor;
 
 #ifdef SMF_SPECULAR_LIGHTING
 	uniform sampler2D specularTex;
@@ -122,7 +116,7 @@ uniform vec2 infoTexGen;     // 1.0/(pwr2map{x,z} * SQUARE_SIZE)
 
 #ifdef SMF_PARALLAX_MAPPING
 vec2 GetParallaxUVOffset(vec2 uv, vec3 dir) {
-	vec4 texel = texture2D(parallaxHeightTex, uv);
+	vec4 texel = texture(parallaxHeightTex, uv);
 
 	// RG: height in [ 0.0, 1.0] (256^2 strata)
 	//  B: scale  in [ 0.0, 1.0] (256   strata), eg.  0.04 (~10.0/256.0)
@@ -145,7 +139,7 @@ vec2 GetParallaxUVOffset(vec2 uv, vec3 dir) {
 #ifdef SMF_ADV_SHADING
 	vec3 GetFragmentNormal(vec2 uv) {
 		vec3 normal;
-		normal.xz = texture2D(normalsTex, uv).ra;
+		normal.xz = texture(normalsTex, uv).ra;
 		normal.y  = sqrt(1.0 - dot(normal.xz, normal.xz));
 		return normal;
 	}
@@ -155,17 +149,17 @@ vec2 GetParallaxUVOffset(vec2 uv, vec3 dir) {
 vec4 GetDetailTextureColor(vec2 uv) {
 	#ifndef SMF_DETAIL_TEXTURE_SPLATTING
 		vec2 detailTexCoord = vertexWorldPos.xz * vec2(SMF_DETAILTEX_RES);
-		vec4 detailCol = (texture2D(detailTex, detailTexCoord) * 2.0) - 1.0;
+		vec4 detailCol = (texture(detailTex, detailTexCoord) * 2.0) - 1.0;
 	#else
 		vec4 splatTexCoord0 = vertexWorldPos.xzxz * splatTexScales.rrgg;
 		vec4 splatTexCoord1 = vertexWorldPos.xzxz * splatTexScales.bbaa;
 		vec4 splatDetails;
-			splatDetails.r = texture2D(splatDetailTex, splatTexCoord0.st).r;
-			splatDetails.g = texture2D(splatDetailTex, splatTexCoord0.pq).g;
-			splatDetails.b = texture2D(splatDetailTex, splatTexCoord1.st).b;
-			splatDetails.a = texture2D(splatDetailTex, splatTexCoord1.pq).a;
+			splatDetails.r = texture(splatDetailTex, splatTexCoord0.st).r;
+			splatDetails.g = texture(splatDetailTex, splatTexCoord0.pq).g;
+			splatDetails.b = texture(splatDetailTex, splatTexCoord1.st).b;
+			splatDetails.a = texture(splatDetailTex, splatTexCoord1.pq).a;
 			splatDetails   = (splatDetails * 2.0) - 1.0;
-		vec4 splatCofac = texture2D(splatDistrTex, uv) * splatTexMults;
+		vec4 splatCofac = texture(splatDistrTex, uv) * splatTexMults;
 		vec4 detailCol = vec4(dot(splatDetails, splatCofac));
 	#endif
 	return detailCol;
@@ -174,16 +168,16 @@ vec4 GetDetailTextureColor(vec2 uv) {
 vec4 GetSplatDetailTextureNormal(vec2 uv, out vec2 splatDetailStrength) {
 	vec4 splatTexCoord0 = vertexWorldPos.xzxz * splatTexScales.rrgg;
 	vec4 splatTexCoord1 = vertexWorldPos.xzxz * splatTexScales.bbaa;
-	vec4 splatCofac = texture2D(splatDistrTex, uv) * splatTexMults;
+	vec4 splatCofac = texture(splatDistrTex, uv) * splatTexMults;
 
 	// dot with 1's to sum up the splat distribution weights
 	splatDetailStrength.x = min(1.0, dot(splatCofac, vec4(1.0)));
 
 	vec4 splatDetailNormal;
-		splatDetailNormal  = ((texture2D(splatDetailNormalTex1, splatTexCoord0.st) * 2.0 - 1.0) * splatCofac.r);
-		splatDetailNormal += ((texture2D(splatDetailNormalTex2, splatTexCoord0.pq) * 2.0 - 1.0) * splatCofac.g);
-		splatDetailNormal += ((texture2D(splatDetailNormalTex3, splatTexCoord1.st) * 2.0 - 1.0) * splatCofac.b);
-		splatDetailNormal += ((texture2D(splatDetailNormalTex4, splatTexCoord1.pq) * 2.0 - 1.0) * splatCofac.a);
+		splatDetailNormal  = ((texture(splatDetailNormalTex1, splatTexCoord0.st) * 2.0 - 1.0) * splatCofac.r);
+		splatDetailNormal += ((texture(splatDetailNormalTex2, splatTexCoord0.pq) * 2.0 - 1.0) * splatCofac.g);
+		splatDetailNormal += ((texture(splatDetailNormalTex3, splatTexCoord1.st) * 2.0 - 1.0) * splatCofac.b);
+		splatDetailNormal += ((texture(splatDetailNormalTex4, splatTexCoord1.pq) * 2.0 - 1.0) * splatCofac.a);
 
 	// note: y=0.01 (pointing up) in case all splat-cofacs are zero
 	splatDetailNormal.y = max(splatDetailNormal.y, 0.01);
@@ -298,7 +292,7 @@ void main() {
 
 	#ifdef SMF_BLEND_NORMALS
 	{
-		vec4 dtSample = texture2D(blendNormalsTex, normTexCoords);
+		vec4 dtSample = texture(blendNormalsTex, normTexCoords);
 		vec3 dtNormal = (dtSample.xyz * 2.0) - 1.0;
 
 		// convert dtNormal from TS to WS before mixing
@@ -334,7 +328,7 @@ void main() {
 	float cosAngleSpecular = clamp(dot(normalize(halfDir), normal), 0.001, 1.0);
 #endif
 
-	vec4 diffuseCol = texture2D(diffuseTex, diffTexCoords);
+	vec4 diffuseCol = texture(diffuseTex, diffTexCoords);
 	vec4 specularCol = vec4(0.0, 0.0, 0.0, 1.0);
 	vec4 emissionCol = vec4(0.0, 0.0, 0.0, 0.0);
 
@@ -342,8 +336,8 @@ void main() {
 	{
 		// cameraDir does not need to be normalized for reflect()
 		vec3 reflectDir = reflect(cameraDir, normal);
-		vec3 reflectCol = textureCube(skyReflectTex, reflectDir).rgb;
-		vec3 reflectMod = texture2D(skyReflectModTex, specTexCoords).rgb;
+		vec3 reflectCol = texture(skyReflectTex, reflectDir).rgb;
+		vec3 reflectMod = texture(skyReflectModTex, specTexCoords).rgb;
 
 		diffuseCol.rgb = mix(diffuseCol.rgb, reflectCol, reflectMod);
 	}
@@ -352,7 +346,7 @@ void main() {
 	{
 		// increase contrast and brightness for the overlays
 		// TODO: make the multiplier configurable by users?
-		diffuseCol.rgb += (texture2D(infoTex, infoTexCoords).rgb * infoTexIntensityMul);
+		diffuseCol.rgb += (texture(infoTex, infoTexCoords).rgb * infoTexIntensityMul);
 		diffuseCol.rgb -= (vec3(0.5, 0.5, 0.5) * float(infoTexIntensityMul == 1.0));
 	}
 	#endif
@@ -368,7 +362,7 @@ void main() {
 
 		// same as ARB shader: shadowCoeff = 1 - (1 - shadowCoeff) * groundShadowDensity
 		vec3 shadowColor = texture(shadowColorTex, vertexShadowPos.xy).rgb;
-		shadowCoeff = mix(vec3(1.0), shadow2DProj(shadowTex, vertexShadowPos).r * shadowColor, groundShadowDensity);
+			shadowCoeff = mix(vec3(1.0), textureProj(shadowTex, vertexShadowPos) * shadowColor, groundShadowDensity);
 	}
 	#endif
 
@@ -383,7 +377,7 @@ void main() {
 		}
 		#else // SMF_ADV_SHADING
 		{
-			fragColor.rgb = (diffuseCol.rgb + detailCol.rgb) * texture2D(shadingTex, specTexCoords).rgb;
+			fragColor.rgb = (diffuseCol.rgb + detailCol.rgb) * texture(shadingTex, specTexCoords).rgb;
 			fragColor.a = diffuseCol.a;
 		}
 		#endif // SMF_ADV_SHADING
@@ -392,7 +386,7 @@ void main() {
 	#ifdef SMF_LIGHT_EMISSION
 	{
 		// apply self-illumination aka. glow, not masked by shadows
-		emissionCol = texture2D(lightEmissionTex, specTexCoords);
+		emissionCol = texture(lightEmissionTex, specTexCoords);
 
 		#ifndef DEFERRED_MODE
 		fragColor.rgb = fragColor.rgb * (1.0 - emissionCol.a) + emissionCol.rgb;
@@ -402,7 +396,7 @@ void main() {
 
 	#ifdef SMF_ADV_SHADING
 		#ifdef SMF_SPECULAR_LIGHTING
-			specularCol = texture2D(specularTex, specTexCoords);
+			specularCol = texture(specularTex, specTexCoords);
 		#else
 			specularCol = vec4(groundSpecularColor, 1.0);
 		#endif // SMF_SPECULAR_LIGHTING
@@ -434,7 +428,6 @@ void main() {
 	// linearly transform the eye-space depths, might be more useful?
 	// gl_FragDepth = gl_FragCoord.z / gl_FragCoord.w;
 #else
-	fragColor.rgb = mix(gl_Fog.color.rgb, fragColor.rgb, fogFactor);
+	fragColor.rgb = mix(coreFogColor, fragColor.rgb, fogFactor);
 #endif
 }
-
