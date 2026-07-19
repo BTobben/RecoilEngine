@@ -560,11 +560,12 @@ void ClearScreen()
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	// Texturing is controlled by samplers in Core profiles; the fixed-function
-	// GL_TEXTURE_2D capability was removed and raises GL_INVALID_ENUM on macOS.
-	if (!globalRenderingInfo.glContextIsCore)
+	// Texture enablement and current color are fixed-function state. Core
+	// profiles source both from shaders and vertex attributes instead.
+	if (!globalRenderingInfo.glContextIsCore) {
 		glEnable(GL_TEXTURE_2D);
-	glColor3f(1, 1, 1);
+		glColor3f(1, 1, 1);
+	}
 }
 
 
