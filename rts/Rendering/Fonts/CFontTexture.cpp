@@ -1336,7 +1336,7 @@ void CFontTexture::CreateTexture(const int width, const int height, const bool i
 #ifdef SUPPORT_AMD_HACKS_HERE
 	constexpr GLint swizzleMaskF[] = { GL_ALPHA, GL_ALPHA, GL_ALPHA, GL_ALPHA };
 	constexpr GLint swizzleMaskD[] = { GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA };
-	if (needsColor)
+	if (needsColor || globalRenderingInfo.glContextIsCore)
 		glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMaskD);
 	else
 		glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMaskF);
@@ -1359,10 +1359,6 @@ void CFontTexture::CreateTexture(const int width, const int height, const bool i
 #endif
 
 	glBindTexture(GL_TEXTURE_2D, 0);
-#ifdef SUPPORT_AMD_HACKS_HERE
-	if (!needsColor)
-		glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMaskD);
-#endif
 
 	if (init) {
 		atlasUpdate = {};
