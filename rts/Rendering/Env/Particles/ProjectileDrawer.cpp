@@ -72,6 +72,11 @@ void CProjectileDrawer::InitStatic() {
 }
 void CProjectileDrawer::KillStatic(bool reload) {
 	RECOIL_DETAILED_TRACY_ZONE;
+	// Game loading can fail before InitStatic() constructs the drawer.  Crash
+	// cleanup must remain safe for this partially initialized renderer state.
+	if (projectileDrawer == nullptr)
+		return;
+
 	projectileDrawer->Kill();
 
 	if (reload)
@@ -1252,4 +1257,3 @@ void CProjectileDrawer::RenderProjectileDestroyed(const CProjectile* p)
 	if (p->model != nullptr)
 		modelRenderers[MDL_TYPE(p)].DelObject(p);
 }
-

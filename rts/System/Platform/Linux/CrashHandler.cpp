@@ -842,9 +842,14 @@ namespace CrashHandler
 #if !(DEDICATED || UNIT_TEST)
 		Watchdog::ClearTimer();
 #endif
-		assert(ctls != nullptr);
-		assert(ctls->handle != 0);
-		assert(threadName[0] != 0);
+		// Assertions disappear in release builds.  In particular, macOS can
+		// register a watchdog slot without usable Linux-style ThreadControls;
+		// dereferencing that slot used to turn a detected hang into a second
+		// SIGSEGV in ThreadControls::Suspend().
+		if (ctls == nullptr || ctls->handle == 0 || threadName == nullptr || threadName[0] == 0) {
+			LOG_L(L_WARNING, "[%s] unable to suspend thread: controls or thread name unavailable", __func__);
+			return;
+		}
 
 		LOG_L(L_WARNING, "Suspended-thread Stacktrace (%s) for Spring %s:", threadName, (SpringVersion::GetFull()).c_str());
 		LOG_L(L_DEBUG, "[%s][1]", __func__);
@@ -855,7 +860,11 @@ namespace CrashHandler
 			// process and analyse the raw stack trace
 			void* iparray[MAX_STACKTRACE_DEPTH];
 
-			ctls->Suspend();
+			const Threading::SuspendResult suspendResult = ctls->Suspend();
+			if (suspendResult != Threading::THREADERR_NONE) {
+				LOG_L(L_WARNING, "[%s] unable to suspend thread %s (error=%d)", __func__, threadName, int(suspendResult));
+				return;
+			}
 			const int numLines = thread_unwind(&ctls->ucontext, iparray, stacktrace);
 			ctls->Resume();
 
