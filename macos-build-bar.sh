@@ -63,6 +63,11 @@ done
 
 mkdir -p "$WORKSPACE" "$WORKSPACE/cache" "$WORKSPACE/build" "$WORKSPACE/dist"
 
+APP_RUNTIME="$WORKSPACE/dist/Beyond All Reason GL41.app/Contents/Resources/runtime/spring"
+if pgrep -f "$APP_RUNTIME" >/dev/null 2>&1; then
+	die "Beyond All Reason GL41 is still running. Quit the app completely before rebuilding so the next launch cannot reuse the old engine process."
+fi
+
 ensure_command_line_tools() {
 	if xcode-select -p >/dev/null 2>&1 && xcrun --find clang >/dev/null 2>&1; then
 		return
