@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -156,6 +157,70 @@ struct StackEntry {
 
 thread_local std::vector<StackEntry> attribStack;
 GLbitfield warnedUnsupportedBits = 0;
+
+struct MatrixState {
+	GLenum mode = GL_MODELVIEW;
+	std::vector<CMatrix44f> modelView = {CMatrix44f()};
+	std::vector<CMatrix44f> projection = {CMatrix44f()};
+	std::vector<CMatrix44f> texture = {CMatrix44f()};
+};
+
+thread_local MatrixState matrixState;
+
+bool ShouldEmulateMatrices()
+{
+	#ifdef HEADLESS
+	return false;
+	#else
+	return globalRenderingInfo.glContextIsCore || glad_glMatrixMode == nullptr || glad_glPushMatrix == nullptr;
+	#endif
+}
+
+std::vector<CMatrix44f>& CurrentMatrixStack()
+{
+	switch (matrixState.mode) {
+		case GL_PROJECTION: return matrixState.projection;
+		case GL_TEXTURE: return matrixState.texture;
+		case GL_MODELVIEW:
+		default: return matrixState.modelView;
+	}
+}
+
+CMatrix44f MatrixFromFloat(const GLfloat* values)
+{
+	CMatrix44f matrix;
+	std::copy_n(values, 16, matrix.m);
+	return matrix;
+}
+
+CMatrix44f MatrixFromDouble(const GLdouble* values)
+{
+	CMatrix44f matrix;
+	std::transform(values, values + 16, matrix.m, [](const GLdouble value) { return static_cast<float>(value); });
+	return matrix;
+}
+
+bool CopyEmulatedMatrix(const GLenum pname, GLfloat* values)
+{
+	const CMatrix44f* matrix = nullptr;
+	switch (pname) {
+		case GL_MODELVIEW_MATRIX: matrix = &matrixState.modelView.back(); break;
+		case GL_PROJECTION_MATRIX: matrix = &matrixState.projection.back(); break;
+		case GL_TEXTURE_MATRIX: matrix = &matrixState.texture.back(); break;
+		default: return false;
+	}
+	std::copy_n(matrix->m, 16, values);
+	return true;
+}
+
+bool CopyEmulatedMatrix(const GLenum pname, GLdouble* values)
+{
+	std::array<GLfloat, 16> floats;
+	if (!CopyEmulatedMatrix(pname, floats.data()))
+		return false;
+	std::copy(floats.begin(), floats.end(), values);
+	return true;
+}
 
 bool ShouldEmulate()
 {
@@ -676,4 +741,205 @@ std::size_t GL::Legacy::AttribStackDepth()
 GLbitfield GL::Legacy::CoreAttribMask()
 {
 	return CORE_ATTRIB_MASK;
+}
+
+void GL::Legacy::MatrixMode(const GLenum mode)
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glMatrixMode(mode);
+		return;
+	}
+
+	if (mode != GL_MODELVIEW && mode != GL_PROJECTION && mode != GL_TEXTURE) {
+		LOG_L(L_ERROR, "[GL::Legacy] unsupported core-profile matrix mode 0x%04x", mode);
+		return;
+	}
+	matrixState.mode = mode;
+}
+
+void GL::Legacy::PushMatrix()
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glPushMatrix();
+		return;
+	}
+	auto& stack = CurrentMatrixStack();
+	stack.push_back(stack.back());
+}
+
+void GL::Legacy::PopMatrix()
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glPopMatrix();
+		return;
+	}
+	auto& stack = CurrentMatrixStack();
+	if (stack.size() <= 1) {
+		LOG_L(L_ERROR, "[GL::Legacy] glPopMatrix called with an empty core-profile matrix stack (mode=0x%04x)", matrixState.mode);
+		return;
+	}
+	stack.pop_back();
+}
+
+void GL::Legacy::LoadIdentity()
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glLoadIdentity();
+		return;
+	}
+	CurrentMatrixStack().back().LoadIdentity();
+}
+
+void GL::Legacy::LoadMatrixf(const GLfloat* matrix)
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glLoadMatrixf(matrix);
+		return;
+	}
+	CurrentMatrixStack().back() = MatrixFromFloat(matrix);
+}
+
+void GL::Legacy::LoadMatrixd(const GLdouble* matrix)
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glLoadMatrixd(matrix);
+		return;
+	}
+	CurrentMatrixStack().back() = MatrixFromDouble(matrix);
+}
+
+void GL::Legacy::MultMatrixf(const GLfloat* matrix)
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glMultMatrixf(matrix);
+		return;
+	}
+	CurrentMatrixStack().back() <<= MatrixFromFloat(matrix);
+}
+
+void GL::Legacy::MultMatrixd(const GLdouble* matrix)
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glMultMatrixd(matrix);
+		return;
+	}
+	CurrentMatrixStack().back() <<= MatrixFromDouble(matrix);
+}
+
+void GL::Legacy::Translatef(const GLfloat x, const GLfloat y, const GLfloat z)
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glTranslatef(x, y, z);
+		return;
+	}
+	CurrentMatrixStack().back().Translate(x, y, z);
+}
+
+void GL::Legacy::Translated(const GLdouble x, const GLdouble y, const GLdouble z)
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glTranslated(x, y, z);
+		return;
+	}
+	Translatef(static_cast<GLfloat>(x), static_cast<GLfloat>(y), static_cast<GLfloat>(z));
+}
+
+void GL::Legacy::Scalef(const GLfloat x, const GLfloat y, const GLfloat z)
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glScalef(x, y, z);
+		return;
+	}
+	CurrentMatrixStack().back().Scale(x, y, z);
+}
+
+void GL::Legacy::Scaled(const GLdouble x, const GLdouble y, const GLdouble z)
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glScaled(x, y, z);
+		return;
+	}
+	Scalef(static_cast<GLfloat>(x), static_cast<GLfloat>(y), static_cast<GLfloat>(z));
+}
+
+void GL::Legacy::Rotatef(const GLfloat angle, const GLfloat x, const GLfloat y, const GLfloat z)
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glRotatef(angle, x, y, z);
+		return;
+	}
+
+	const float length = std::sqrt(x * x + y * y + z * z);
+	if (length <= 0.0f)
+		return;
+	constexpr float DEG_TO_RAD = 0.01745329251994329577f;
+	CurrentMatrixStack().back().Rotate(angle * DEG_TO_RAD, float3{x / length, y / length, z / length});
+}
+
+void GL::Legacy::Rotated(const GLdouble angle, const GLdouble x, const GLdouble y, const GLdouble z)
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glRotated(angle, x, y, z);
+		return;
+	}
+	Rotatef(static_cast<GLfloat>(angle), static_cast<GLfloat>(x), static_cast<GLfloat>(y), static_cast<GLfloat>(z));
+}
+
+void GL::Legacy::Ortho(const GLdouble left, const GLdouble right, const GLdouble bottom, const GLdouble top, const GLdouble nearValue, const GLdouble farValue)
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glOrtho(left, right, bottom, top, nearValue, farValue);
+		return;
+	}
+	CurrentMatrixStack().back() <<= CMatrix44f::OrthoProj(left, right, bottom, top, nearValue, farValue);
+}
+
+void GL::Legacy::Frustum(const GLdouble left, const GLdouble right, const GLdouble bottom, const GLdouble top, const GLdouble nearValue, const GLdouble farValue)
+{
+	if (!ShouldEmulateMatrices()) {
+		glad_glFrustum(left, right, bottom, top, nearValue, farValue);
+		return;
+	}
+	CurrentMatrixStack().back() <<= CMatrix44f::PerspProj(left, right, bottom, top, nearValue, farValue);
+}
+
+void GL::Legacy::GetFloatv(const GLenum pname, GLfloat* values)
+{
+	if (!ShouldEmulateMatrices() || !CopyEmulatedMatrix(pname, values))
+		glad_glGetFloatv(pname, values);
+}
+
+void GL::Legacy::GetDoublev(const GLenum pname, GLdouble* values)
+{
+	if (!ShouldEmulateMatrices() || !CopyEmulatedMatrix(pname, values))
+		glad_glGetDoublev(pname, values);
+}
+
+void GL::Legacy::GetIntegerv(const GLenum pname, GLint* values)
+{
+	if (ShouldEmulateMatrices() && pname == GL_MATRIX_MODE) {
+		*values = matrixState.mode;
+		return;
+	}
+	glad_glGetIntegerv(pname, values);
+}
+
+const CMatrix44f& GL::Legacy::ModelViewMatrix()
+{
+	return matrixState.modelView.back();
+}
+
+const CMatrix44f& GL::Legacy::ProjectionMatrix()
+{
+	return matrixState.projection.back();
+}
+
+CMatrix44f GL::Legacy::ModelViewProjectionMatrix()
+{
+	return ProjectionMatrix() * ModelViewMatrix();
+}
+
+bool GL::Legacy::UsesEmulatedMatrixStack()
+{
+	return ShouldEmulateMatrices();
 }

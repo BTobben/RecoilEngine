@@ -9,6 +9,7 @@
 #include "System/ContainerUtil.h"
 #include "System/Log/ILog.h"
 #include "Rendering/GlobalRenderingInfo.h"
+#include "Rendering/GL/LegacyGLState.h"
 #include "Rendering/Shaders/Shader.h"
 #include "Rendering/Shaders/ShaderHandler.h"
 
@@ -165,6 +166,19 @@ public:
 		shader->SetReloadComplete();
 
 		return *shader;
+	}
+
+	static void UpdateCoreTransformIfBound()
+	{
+		if (!globalRenderingInfo.glContextIsCore)
+			return;
+
+		auto* shader = shaderHandler->GetProgramObject(poClass, typeName);
+		if (shader == nullptr || shaderHandler->GetCurrentlyBoundProgram() != shader)
+			return;
+
+		const CMatrix44f transform = GL::Legacy::ModelViewProjectionMatrix();
+		shader->SetUniformMatrix4x4("transformMatrix", false, transform.m);
 	}
 private:
 	static const std::string TypeToString(const AttributeDef& ad) {
@@ -873,6 +887,7 @@ inline void TypedRenderBuffer<T>::DrawArrays(uint32_t mode, bool rewind)
 	size_t vertsCount = (verts.size() - vboStartIndex);
 	if (vertsCount <= 0)
 		return;
+	RenderBufferShader<T>::UpdateCoreTransformIfBound();
 #ifndef HEADLESS
 	assert(vao.GetIdRaw() > 0);
 #endif
@@ -899,6 +914,7 @@ inline void TypedRenderBuffer<T>::DrawElements(uint32_t mode, bool rewind)
 	if (indcsCount == 0) {
 		return;
 	}
+	RenderBufferShader<T>::UpdateCoreTransformIfBound();
 
 	#define BUFFER_OFFSET(T, n) (reinterpret_cast<void*>(sizeof(T) * (n)))
 #ifndef HEADLESS

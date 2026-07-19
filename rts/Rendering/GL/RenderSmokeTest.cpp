@@ -357,6 +357,43 @@ bool PixelMatches(const std::array<GLubyte, 4>& pixel)
 		&& pixel[3] >= 240;
 }
 
+bool ProbeLegacyMatrixStack(std::string& error)
+{
+	if (!GL::Legacy::UsesEmulatedMatrixStack()) {
+		error = "Core context did not select the engine-owned matrix stack";
+		return false;
+	}
+
+	GLint originalMode = GL_MODELVIEW;
+	GL::Legacy::GetIntegerv(GL_MATRIX_MODE, &originalMode);
+	const CMatrix44f originalModelView = GL::Legacy::ModelViewMatrix();
+	const CMatrix44f originalProjection = GL::Legacy::ProjectionMatrix();
+
+	GL::Legacy::MatrixMode(GL_PROJECTION);
+	GL::Legacy::PushMatrix();
+	GL::Legacy::LoadIdentity();
+	GL::Legacy::Ortho(-2.0, 2.0, -2.0, 2.0, -1.0, 1.0);
+	GL::Legacy::MatrixMode(GL_MODELVIEW);
+	GL::Legacy::PushMatrix();
+	GL::Legacy::LoadIdentity();
+	GL::Legacy::Translatef(0.5f, -0.25f, 0.0f);
+	const CMatrix44f transformed = GL::Legacy::ModelViewProjectionMatrix();
+	GL::Legacy::PopMatrix();
+	GL::Legacy::MatrixMode(GL_PROJECTION);
+	GL::Legacy::PopMatrix();
+	GL::Legacy::MatrixMode(originalMode);
+
+	if (transformed.IsIdentity()) {
+		error = "profile-aware matrix stack did not produce a transform";
+		return false;
+	}
+	if (GL::Legacy::ModelViewMatrix() != originalModelView || GL::Legacy::ProjectionMatrix() != originalProjection) {
+		error = "profile-aware matrix stack did not restore its startup state";
+		return false;
+	}
+	return true;
+}
+
 } // namespace
 
 bool GL::RunStartupRenderSmokeTest(std::string& report)
@@ -379,6 +416,10 @@ bool GL::RunStartupRenderSmokeTest(std::string& report)
 	}
 	if (!Legacy::UsesEmulatedAttribStack()) {
 		report = "Core context did not select the engine-owned attribute stack";
+		LOG_L(L_ERROR, "[GLSmoke] FAIL %s", report.c_str());
+		return false;
+	}
+	if (!ProbeLegacyMatrixStack(report)) {
 		LOG_L(L_ERROR, "[GLSmoke] FAIL %s", report.c_str());
 		return false;
 	}
@@ -489,6 +530,7 @@ bool GL::RunStartupRenderSmokeTest(std::string& report)
 			<< ',' << static_cast<unsigned>(centerPixel[2])
 			<< ',' << static_cast<unsigned>(centerPixel[3]) << ">"
 			<< " uboBindingFallback=1"
+			<< " matrixStack=1"
 			<< " stateRestored=1";
 		report = stream.str();
 		LOG("[GLSmoke] %s", report.c_str());

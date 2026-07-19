@@ -18,6 +18,7 @@
 
 #include "glStateDebug.h"
 #include "glDebugGroup.hpp"
+#include "LegacyGLState.h"
 
 #if       defined(HEADLESS)
 	// All OpenGL functions should always exists on HEADLESS.
@@ -156,6 +157,5 @@ struct SInstanceData {
 	uint32_t bposeMatOffset;
 };
 
-#include "LegacyGLState.h"
 
 #endif // _MY_GL_H
