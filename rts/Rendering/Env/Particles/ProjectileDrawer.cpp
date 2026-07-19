@@ -975,7 +975,10 @@ void CProjectileDrawer::DrawProjectileModel(const CProjectile* p)
 
 			CUnitDrawer::SetTeamColor(pp->GetTeamID());
 
-			auto scopedPushPop = spring::ScopedNullResource(glPushMatrix, glPopMatrix);
+			auto scopedPushPop = spring::ScopedNullResource(
+				[]() { glPushMatrix(); },
+				[]() { glPopMatrix(); }
+			);
 
 			glTranslatef3(pp->drawPos);
 			glRotatef(pp->GetDrawAngle(), pp->spinVec.x, pp->spinVec.y, pp->spinVec.z);
