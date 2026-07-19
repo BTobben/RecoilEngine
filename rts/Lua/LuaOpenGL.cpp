@@ -2834,6 +2834,26 @@ int LuaOpenGL::Rect(lua_State* L)
 	const float y1 = luaL_checkfloat(L, 2);
 	const float x2 = luaL_checkfloat(L, 3);
 	const float y2 = luaL_checkfloat(L, 4);
+
+	if (globalRenderingInfo.glContextIsCore) {
+		auto& rb = RenderBuffer::GetTypedRenderBuffer<VA_TYPE_2DC>();
+		auto& shader = rb.GetShader();
+		const SColor drawColor(color.data());
+
+		rb.AssertSubmission();
+		rb.AddQuadTriangles(
+			{ x1, y1, drawColor },
+			{ x2, y1, drawColor },
+			{ x2, y2, drawColor },
+			{ x1, y2, drawColor }
+		);
+
+		shader.Enable();
+		rb.DrawElements(GL_TRIANGLES);
+		shader.Disable();
+		return 0;
+	}
+
 	glRectf(x1, y1, x2, y2);
 	return 0;
 }
