@@ -3,9 +3,6 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
-#include <fstream>
-#include <mutex>
-#include <unordered_set>
 
 #include <SDL.h>
 
@@ -29,7 +26,6 @@
 #include "System/StringHash.h"
 #include "System/Matrix44f.h"
 #include "System/Config/ConfigHandler.h"
-#include "System/FileSystem/DataDirLocater.h"
 #include "System/Log/ILog.h"
 #include "System/Platform/CrashHandler.h"
 #include "System/Platform/MessageBox.h"
@@ -50,9 +46,6 @@
 CONFIG(bool, DebugGL).defaultValue(false).description("Enables GL debug-context and output. (see GL_ARB_debug_output)");
 CONFIG(bool, DebugGLStacktraces).defaultValue(false).description("Create a stacktrace when an OpenGL error occurs");
 CONFIG(bool, DebugGLReportGroups).defaultValue(false).description("Show OpenGL PUSH/POP groups in the GL debug");
-CONFIG(bool, DebugGLUniqueOnly).defaultValue(false).description("Report each distinct OpenGL debug message only once per run");
-CONFIG(bool, DebugGLLogToInfolog).defaultValue(true).description("Mirror OpenGL debug messages to infolog and the console");
-CONFIG(bool, DebugGLCompatibilityReport).defaultValue(false).description("Write distinct OpenGL debug messages to gl_compatibility_report.txt in the engine write directory");
 
 #if defined(__APPLE__)
 CONFIG(int, GLContextMajorVersion).defaultValue(4).minimumValue(3).maximumValue(4);
@@ -69,8 +62,6 @@ CONFIG(int, ForceDisableExplicitAttribLocs).defaultValue(0).minimumValue(0).maxi
 CONFIG(int, ForceDisableClipCtrl).defaultValue(0).minimumValue(0).maximumValue(1);
 //CONFIG(int, ForceDisableShaders).defaultValue(0).minimumValue(0).maximumValue(1);
 CONFIG(int, ForceDisableGL4).defaultValue(0).safemodeValue(1).minimumValue(0).maximumValue(1);
-CONFIG(std::string, RenderingBackend).defaultValue("auto").description("Requested rendering backend: auto or opengl (vulkan is reserved for a future backend)");
-CONFIG(std::string, OpenGLFeatureLevel).defaultValue("auto").description("Requested OpenGL feature level: auto, full, or gl41");
 
 #if defined(__APPLE__)
 CONFIG(int, ForceCoreContext).defaultValue(1).minimumValue(0).maximumValue(1);
@@ -318,16 +309,7 @@ CGlobalRendering::CGlobalRendering()
 	, maxViewRange(MAX_VIEW_RANGE * 0.5f)
 	, aspectRatio(1.0f)
 
-	, forceDisablePersistentMapping(
-		configHandler->GetString("OpenGLFeatureLevel") == "gl41" ? 1 :
-		configHandler->GetString("OpenGLFeatureLevel") == "full" ? 0 :
-		configHandler->GetInt("ForceDisablePersistentMapping")
-	)
-	, forceDisableGL4(
-		configHandler->GetString("OpenGLFeatureLevel") == "gl41" ? 1 :
-		configHandler->GetString("OpenGLFeatureLevel") == "full" ? 0 :
-		configHandler->GetInt("ForceDisableGL4")
-	)
+	, forceDisableGL4(configHandler->GetInt("ForceDisableGL4"))
 	, forceCoreContext(configHandler->GetInt("ForceCoreContext"))
 	, forceSwapBuffers(configHandler->GetInt("ForceSwapBuffers"))
 
@@ -403,21 +385,6 @@ CGlobalRendering::CGlobalRendering()
 	, glExtensions{}
 	, glTimerQueries{0}
 {
-	const std::string requestedBackend = configHandler->GetString("RenderingBackend");
-	if (requestedBackend != "auto" && requestedBackend != "opengl") {
-		LOG_L(L_WARNING, "[GR] RenderingBackend=\"%s\" is unavailable; falling back to auto", requestedBackend.c_str());
-		configHandler->Set("RenderingBackend", std::string("auto"));
-	}
-
-	const std::string requestedFeatureLevel = configHandler->GetString("OpenGLFeatureLevel");
-	if (requestedFeatureLevel != "auto" && requestedFeatureLevel != "full" && requestedFeatureLevel != "gl41") {
-		LOG_L(L_WARNING, "[GR] OpenGLFeatureLevel=\"%s\" is invalid; falling back to auto", requestedFeatureLevel.c_str());
-		configHandler->Set("OpenGLFeatureLevel", std::string("auto"));
-	}
-
-	LOG("[GR] renderer selection: backend=%s OpenGLFeatureLevel=%s ForceDisableGL4=%d ForceDisablePersistentMapping=%d",
-		requestedBackend.c_str(), requestedFeatureLevel.c_str(), forceDisableGL4, forceDisablePersistentMapping);
-
 #ifdef _WIN32
 	dwmApiLib = std::unique_ptr<SharedLib>(SharedLib::Instantiate("dwmapi"));
 	if (dwmApiLib) {
@@ -962,7 +929,7 @@ void CGlobalRendering::SetGLSupportFlags()
 	}
 
 	supportPersistentMapping = GLAD_GL_ARB_buffer_storage;
-	supportPersistentMapping &= (forceDisablePersistentMapping == 0);
+	supportPersistentMapping &= (configHandler->GetInt("ForceDisablePersistentMapping") == 0);
 
 	supportExplicitAttribLoc = GLAD_GL_ARB_explicit_attrib_location;
 	supportExplicitAttribLoc &= (configHandler->GetInt("ForceDisableExplicitAttribLocs") == 0);
@@ -1105,7 +1072,17 @@ void CGlobalRendering::QueryGLMaxVals()
 		glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE,      &glslMaxStorageBufferSize);
 	}
 
-	glGetIntegerv(globalRenderingInfo.glContextIsCore ? GL_MAX_VARYING_COMPONENTS : GL_MAX_VARYING_FLOATS, &glslMaxVaryings);
+	if (globalRenderingInfo.glContextIsCore) {
+		// GL_MAX_VARYING_COMPONENTS is removed from forward-compatible Core
+		// contexts (including macOS).  Use the per-stage Core limits instead.
+		GLint maxVertexOutputComponents = 0;
+		GLint maxFragmentInputComponents = 0;
+		glGetIntegerv(GL_MAX_VERTEX_OUTPUT_COMPONENTS, &maxVertexOutputComponents);
+		glGetIntegerv(GL_MAX_FRAGMENT_INPUT_COMPONENTS, &maxFragmentInputComponents);
+		glslMaxVaryings = std::min(maxVertexOutputComponents, maxFragmentInputComponents);
+	} else {
+		glGetIntegerv(GL_MAX_VARYING_FLOATS, &glslMaxVaryings);
+	}
 	glGetIntegerv(GL_MAX_VERTEX_ATTRIBS,                 &glslMaxAttributes);
 	glGetIntegerv(GL_MAX_DRAW_BUFFERS,                   &glslMaxDrawBuffers);
 	glGetIntegerv(GL_MAX_ELEMENTS_INDICES,               &glslMaxRecommendedIndices);
@@ -2125,72 +2102,7 @@ static inline const char* glDebugMessageSeverityName(GLenum msgSevr) {
 struct GLDebugOptions {
 	bool dbgTraces;
 	bool dbgGroups;
-	bool uniqueOnly;
-	bool logToInfolog;
-	bool compatibilityReport;
 };
-
-class GLDebugReporter
-{
-public:
-	void Reset(bool writeReport)
-	{
-		std::lock_guard<std::mutex> lock(mutex);
-		messages.clear();
-		report.close();
-
-		if (!writeReport)
-			return;
-
-		report.open(dataDirLocater.GetWriteDirPath() + "gl_compatibility_report.txt", std::ios::out | std::ios::trunc);
-		if (report.is_open()) {
-			report << "Recoil OpenGL compatibility report\n";
-			report << "Each distinct driver message is recorded once per run.\n\n";
-			report << "context.version=" << globalRenderingInfo.glVersion << "\n";
-			report << "context.glsl=" << globalRenderingInfo.glslVersion << "\n";
-			report << "context.vendor=" << globalRenderingInfo.gpuVendor << "\n";
-			report << "context.renderer=" << globalRenderingInfo.gpuName << "\n";
-			if (globalRendering != nullptr) {
-				report << "capability.gl41_core=" << globalRendering->supportGL41Core << "\n";
-				report << "capability.uniform_buffers=" << globalRendering->supportUniformBuffers << "\n";
-				report << "capability.glsl_420pack=" << globalRendering->supportGLSL420Pack << "\n";
-				report << "capability.compute_shaders=" << globalRendering->supportComputeShaders << "\n";
-				report << "capability.shader_storage_buffers=" << globalRendering->supportShaderStorageBuffers << "\n";
-				report << "capability.image_load_store=" << globalRendering->supportImageLoadStore << "\n";
-				report << "capability.atomic_counter_buffers=" << globalRendering->supportAtomicCounterBuffers << "\n";
-				report << "capability.multi_draw_indirect=" << globalRendering->supportMultiDrawIndirect << "\n";
-			}
-			report << "\n";
-			report.flush();
-		}
-	}
-
-	bool Record(GLenum source, GLenum type, GLuint id, GLenum severity, const char* message)
-	{
-		std::lock_guard<std::mutex> lock(mutex);
-		const std::string key = fmt::format("{}:{}:{}:{}:{}", source, type, id, severity, message);
-		const bool inserted = messages.emplace(key).second;
-
-		if (inserted && report.is_open()) {
-			report
-				<< "id=" << id
-				<< " source=" << glDebugMessageSourceName(source)
-				<< " type=" << glDebugMessageTypeName(type)
-				<< " severity=" << glDebugMessageSeverityName(severity)
-				<< " message=\"" << message << "\"\n";
-			report.flush();
-		}
-
-		return inserted;
-	}
-
-private:
-	std::mutex mutex;
-	std::unordered_set<std::string> messages;
-	std::ofstream report;
-};
-
-static GLDebugReporter glDebugReporter;
 
 static void APIENTRY glDebugMessageCallbackFunc(
 	GLenum msgSrce,
@@ -2215,13 +2127,8 @@ static void APIENTRY glDebugMessageCallbackFunc(
 	const char* msgSrceStr = glDebugMessageSourceName(msgSrce);
 	const char* msgTypeStr = glDebugMessageTypeName(msgType);
 	const char* msgSevrStr = glDebugMessageSeverityName(msgSevr);
-	const bool firstOccurrence = glDebugReporter.Record(msgSrce, msgType, msgID, msgSevr, dbgMessage);
 
-	if (glDebugOptions != nullptr && glDebugOptions->uniqueOnly && !firstOccurrence)
-		return;
-
-	if (glDebugOptions == nullptr || glDebugOptions->logToInfolog)
-		LOG_L(L_WARNING, "[OPENGL_DEBUG] id=%u source=%s type=%s severity=%s msg=\"%s\"", msgID, msgSrceStr, msgTypeStr, msgSevrStr, dbgMessage);
+	LOG_L(L_WARNING, "[OPENGL_DEBUG] id=%u source=%s type=%s severity=%s msg=\"%s\"", msgID, msgSrceStr, msgTypeStr, msgSevrStr, dbgMessage);
 
 	if ((glDebugOptions == nullptr) || !glDebugOptions->dbgTraces)
 		return;
@@ -2247,10 +2154,6 @@ bool CGlobalRendering::ToggleGLDebugOutput(unsigned int msgSrceIdx, unsigned int
 
 		glDebugOptions.dbgTraces = configHandler->GetBool("DebugGLStacktraces");
 		glDebugOptions.dbgGroups = configHandler->GetBool("DebugGLReportGroups");
-		glDebugOptions.uniqueOnly = configHandler->GetBool("DebugGLUniqueOnly");
-		glDebugOptions.logToInfolog = configHandler->GetBool("DebugGLLogToInfolog");
-		glDebugOptions.compatibilityReport = configHandler->GetBool("DebugGLCompatibilityReport");
-		glDebugReporter.Reset(glDebugOptions.compatibilityReport);
 
 		glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 		glDebugMessageCallback((GLDEBUGPROC)&glDebugMessageCallbackFunc, (const void*)&glDebugOptions);
