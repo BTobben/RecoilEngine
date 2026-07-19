@@ -103,6 +103,26 @@ static bool ExtractGlslVersion(std::string* src, std::string* version)
 }
 
 #if defined(__APPLE__)
+static bool IsGlslIdentifierChar(const char c)
+{
+	return ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') || c == '_');
+}
+
+static bool ContainsGlslIdentifier(const std::string& source, const std::string_view identifier)
+{
+	for (size_t pos = source.find(identifier); pos != std::string::npos; pos = source.find(identifier, pos + 1)) {
+		const bool startsAtBoundary = (pos == 0 || !IsGlslIdentifierChar(source[pos - 1]));
+		const size_t end = pos + identifier.size();
+		const bool endsAtBoundary = (end == source.size() || !IsGlslIdentifierChar(source[end]));
+
+		if (startsAtBoundary && endsAtBoundary)
+			return true;
+	}
+
+	return false;
+}
+
 static bool UsesCompatibilityProfileGLSL(const std::string& source)
 {
 	// Apple exposes OpenGL 4.1 exclusively as a Core profile and its shader
@@ -116,11 +136,11 @@ static bool UsesCompatibilityProfileGLSL(const std::string& source)
 		"gl_TexCoord", "gl_FrontColor", "gl_BackColor",
 		"gl_FrontSecondaryColor", "gl_BackSecondaryColor",
 		"gl_FogFragCoord", "gl_FragColor", "gl_FragData",
-		"attribute ", "varying ", "ftransform(", "texture2D("
+		"attribute", "varying", "ftransform", "texture2D"
 	};
 
 	return std::ranges::any_of(compatibilityTokens, [&source](const std::string_view token) {
-		return (source.find(token) != std::string::npos);
+		return ContainsGlslIdentifier(source, token);
 	});
 }
 
