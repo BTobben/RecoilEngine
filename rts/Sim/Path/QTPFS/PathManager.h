@@ -204,6 +204,10 @@ namespace QTPFS {
 		QTPFS::entity systemEntity = entt::null;
 
 		bool isFinalized = false;
+		bool syncUpdatedPathsSystemInitialized = false;
+		bool removeDeadPathsSystemInitialized = false;
+		bool pathSpeedModInfoSystemInitialized = false;
+		bool requeuePathsSystemInitialized = false;
 
 		static constexpr size_t INITIAL_PATH_RESERVE = 256;
 	};

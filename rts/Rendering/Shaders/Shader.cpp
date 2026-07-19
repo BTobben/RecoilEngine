@@ -18,6 +18,8 @@
 #include "System/Config/ConfigHandler.h"
 
 #include <algorithm>
+#include <array>
+#include <string_view>
 #ifdef DEBUG
 	#include <cstring> // strncmp
 #endif
@@ -99,6 +101,41 @@ static bool ExtractGlslVersion(std::string* src, std::string* version)
 	}
 	return false;
 }
+
+#if defined(__APPLE__)
+static bool UsesCompatibilityProfileGLSL(const std::string& source)
+{
+	// Apple exposes OpenGL 4.1 exclusively as a Core profile and its shader
+	// compiler rejects #version 130 there.  Only promote shaders which already
+	// use Core-compatible inputs and outputs; the legacy render paths below are
+	// deliberately left untouched until they can be converted properly.
+	static constexpr std::array<std::string_view, 22> compatibilityTokens = {
+		"gl_Vertex", "gl_Normal", "gl_Color", "gl_SecondaryColor",
+		"gl_MultiTexCoord", "gl_ModelView", "gl_Projection",
+		"gl_TextureMatrix", "gl_NormalMatrix", "gl_ClipVertex",
+		"gl_TexCoord", "gl_FrontColor", "gl_BackColor",
+		"gl_FrontSecondaryColor", "gl_BackSecondaryColor",
+		"gl_FogFragCoord", "gl_FragColor", "gl_FragData",
+		"attribute ", "varying ", "ftransform(", "texture2D("
+	};
+
+	return std::ranges::any_of(compatibilityTokens, [&source](const std::string_view token) {
+		return (source.find(token) != std::string::npos);
+	});
+}
+
+static void PromoteCoreCompatibleGLSL(std::string* version, const std::string& source)
+{
+	if (!globalRenderingInfo.glContextIsCore)
+		return;
+	if (version->find("#version 130") == std::string::npos)
+		return;
+	if (UsesCompatibilityProfileGLSL(source))
+		return;
+
+	*version = "#version 410 core\n";
+}
+#endif
 
 /*****************************************************************/
 
@@ -185,6 +222,10 @@ namespace Shader {
 		// version pragma in definitions overrides version pragma in source (if any)
 		ExtractGlslVersion(&sourceStr, &versionStr);
 		ExtractGlslVersion(&defFlags,  &versionStr);
+
+		#if defined(__APPLE__)
+		PromoteCoreCompatibleGLSL(&versionStr, sourceStr);
+		#endif
 
 		if (!versionStr.empty()) EnsureEndsWith(&versionStr, "\n");
 		if (!defFlags.empty())   EnsureEndsWith(&defFlags,   "\n");

@@ -191,10 +191,14 @@ QTPFS::PathManager::~PathManager() {
 	RECOIL_DETAILED_TRACY_ZONE;
 	isFinalized = false;
 
-	RequeuePathsSystem::Shutdown();
-	PathSpeedModInfoSystem::Shutdown();
-	RemoveDeadPathsSystem::Shutdown();
-	SyncUpdatedPathsSystem::Shutdown();
+	if (requeuePathsSystemInitialized)
+		RequeuePathsSystem::Shutdown();
+	if (pathSpeedModInfoSystemInitialized)
+		PathSpeedModInfoSystem::Shutdown();
+	if (removeDeadPathsSystemInitialized)
+		RemoveDeadPathsSystem::Shutdown();
+	if (syncUpdatedPathsSystemInitialized)
+		SyncUpdatedPathsSystem::Shutdown();
 
 	// print out and clear anything still left in the registry
 	// due to delayed path deletion there may be some entities still around.
@@ -433,12 +437,16 @@ void QTPFS::PathManager::Load() {
 
 		// This system syncs the background pathing requests.
 		SyncUpdatedPathsSystem::Init();
+		syncUpdatedPathsSystemInitialized = true;
 	
 		// Systems following here can make changes that would otherwise break active searches. It is safe from this
 		// point on.
 		RemoveDeadPathsSystem::Init();
+		removeDeadPathsSystemInitialized = true;
 		PathSpeedModInfoSystem::Init();
+		pathSpeedModInfoSystemInitialized = true;
 		RequeuePathsSystem::Init();
+		requeuePathsSystemInitialized = true;
 
 		// NOTE:
 		//   should be sufficient in theory, because if either
