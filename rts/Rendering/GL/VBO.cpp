@@ -41,8 +41,8 @@ bool VBO::IsSupported(GLenum target) {
 	if (!isRangeMappingSupported) //TODO glBufferSubData() fallback ?
 		return false;
 
-	static bool isPBOSupported  = (GLAD_GL_EXT_pixel_buffer_object);
-	static bool isVBOSupported  = (GLAD_GL_ARB_vertex_buffer_object);
+	static bool isPBOSupported  = (GLAD_GL_VERSION_2_1 || GLAD_GL_EXT_pixel_buffer_object);
+	static bool isVBOSupported  = (GLAD_GL_VERSION_1_5 || GLAD_GL_ARB_vertex_buffer_object);
 	static bool isUBOSupported  = (GLAD_GL_VERSION_3_1 || GLAD_GL_ARB_uniform_buffer_object);
 	static bool isCopyBuffSupported = (GLAD_GL_VERSION_3_1 || GLAD_GL_ARB_copy_buffer);
 
@@ -127,7 +127,7 @@ void VBO::Delete() {
 	}
 	bbrItems.clear();
 
-	if (GLAD_GL_ARB_vertex_buffer_object)
+	if (GLAD_GL_VERSION_1_5 || GLAD_GL_ARB_vertex_buffer_object)
 		glDeleteBuffers(1, &vboId);
 
 	vboId = 0;
@@ -236,7 +236,7 @@ void VBO::Resize(GLsizeiptr newSize, GLenum newUsage)
 		GLint wbglsize = 0;
 		glGetBufferParameteriv(curBoundTarget, GL_BUFFER_SIZE, &rbglsize);
 
-		if (GLAD_GL_ARB_copy_buffer) {
+		if (GLAD_GL_VERSION_3_1 || GLAD_GL_ARB_copy_buffer) {
 			VBO vbo(GL_COPY_WRITE_BUFFER, immutableStorage);
 
 			vbo.Bind(GL_COPY_WRITE_BUFFER);
@@ -331,7 +331,7 @@ bool VBO::CopyTo(VBO& dest, GLsizeiptr copySize)
 		return false;
 	}
 
-	if (GLAD_GL_ARB_copy_buffer) {
+	if (GLAD_GL_VERSION_3_1 || GLAD_GL_ARB_copy_buffer) {
 		auto origDestBoundTarget = dest.GetCurrTarget();
 		dest.Bind(GL_COPY_WRITE_BUFFER);
 		sizeInBytes = 0;

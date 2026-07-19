@@ -62,8 +62,8 @@ bool LuaVAOImpl::Supported()
 	return (
 		VBO::IsSupported(GL_ARRAY_BUFFER) &&
 		VAO::IsSupported() &&
-		GLAD_GL_ARB_instanced_arrays &&
-		GLAD_GL_ARB_draw_elements_base_vertex
+		(GLAD_GL_VERSION_3_3 || GLAD_GL_ARB_instanced_arrays) &&
+		(GLAD_GL_VERSION_3_2 || GLAD_GL_ARB_draw_elements_base_vertex)
 	);
 }
 
