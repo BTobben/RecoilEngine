@@ -17,6 +17,7 @@
 #include "System/StringUtil.h"
 #include "System/TypeToStr.h"
 #include "Rendering/GlobalRendering.h"
+#include "Rendering/GlobalRenderingInfo.h"
 #include "Rendering/Models/ModelsMemStorage.h"
 #include "Rendering/Models/ModelsMemStorageDefs.h"
 #include "Rendering/UniformConstants.h"
@@ -771,8 +772,29 @@ int LuaShaders::CreateShader(lua_State* L)
 
 	glUseProgram(currentProgram);
 
+	GLint previousVAO = 0;
+	GLuint validationVAO = 0;
+
+	// A core-profile program can only be validated while a VAO is bound.
+	// Lua shaders bypass the engine shader-object validation path, so provide
+	// the same temporary VAO fallback here when validation happens outside a
+	// draw call.
+	if (globalRenderingInfo.glContextIsCore) {
+		glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &previousVAO);
+
+		if (previousVAO == 0) {
+			glGenVertexArrays(1, &validationVAO);
+			glBindVertexArray(validationVAO);
+		}
+	}
+
 	glValidateProgram(prog);
 	glGetProgramiv(prog, GL_VALIDATE_STATUS, &validStatus);
+
+	if (validationVAO != 0) {
+		glBindVertexArray(previousVAO);
+		glDeleteVertexArrays(1, &validationVAO);
+	}
 
 	LuaShaders& shaders = CLuaHandle::GetActiveShaders(L);
 
