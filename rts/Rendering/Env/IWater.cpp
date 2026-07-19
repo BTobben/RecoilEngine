@@ -12,6 +12,7 @@
 #include "Map/ReadMap.h"
 #include "Map/BaseGroundDrawer.h"
 #include "Rendering/Features/FeatureDrawer.h"
+#include "Rendering/GlobalRenderingInfo.h"
 #include "Rendering/Units/UnitDrawer.h"
 #include "Rendering/Env/Particles/ProjectileDrawer.h"
 #include "Sim/Projectiles/ExplosionListener.h"
@@ -57,11 +58,15 @@ void IWater::SetModelClippingPlane(const double* planeEq) {
 void IWater::SetWater(int rendererMode)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	// ARB assembly programs are part of the compatibility path.  Some core
+	// drivers still advertise the extension even though its entry points are
+	// unavailable, so never instantiate these renderers in a core context.
+	const bool allowARBPrograms = !globalRenderingInfo.glContextIsCore && GLAD_GL_ARB_fragment_program;
 	static std::array<bool, NUM_WATER_RENDERERS> allowedModes = {
 		true,
-		GLAD_GL_ARB_fragment_program && ProgramStringIsNative(GL_FRAGMENT_PROGRAM_ARB, "ARB/water.fp"),
-		GLAD_GL_ARB_fragment_program && ProgramStringIsNative(GL_FRAGMENT_PROGRAM_ARB, "ARB/waterDyn.fp"),
-		GLAD_GL_ARB_fragment_program && GLAD_GL_ARB_texture_rectangle,
+		allowARBPrograms && ProgramStringIsNative(GL_FRAGMENT_PROGRAM_ARB, "ARB/water.fp"),
+		allowARBPrograms && ProgramStringIsNative(GL_FRAGMENT_PROGRAM_ARB, "ARB/waterDyn.fp"),
+		allowARBPrograms && GLAD_GL_ARB_texture_rectangle,
 		GLAD_GL_ARB_shading_language_100 && GLAD_GL_ARB_fragment_shader && GLAD_GL_ARB_vertex_shader,
 	};
 
@@ -218,4 +223,3 @@ void IWater::DrawRefractions(const double* clipPlaneEqs, bool drawGround, bool d
 
 	game->SetDrawMode(CGame::gameNormalDraw);
 }
-

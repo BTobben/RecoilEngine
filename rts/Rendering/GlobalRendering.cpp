@@ -1036,7 +1036,7 @@ void CGlobalRendering::SetGLSupportFlags()
 
 	// runtime-compress textures? (also already required for SMF ground textures)
 	// default to off because it reduces quality, smallest mipmap level is bigger
-	if (GLAD_GL_ARB_texture_compression)
+	if ((GLAD_GL_VERSION_1_3 || GLAD_GL_ARB_texture_compression) && IS_GL_FUNCTION_AVAILABLE(glCompressedTexImage2D))
 		compressTextures = configHandler->GetBool("CompressTextures");
 
 
@@ -1044,7 +1044,8 @@ void CGlobalRendering::SetGLSupportFlags()
 	supportRestartPrimitive = GLAD_GL_NV_primitive_restart;
 	supportClipSpaceControl = GLAD_GL_ARB_clip_control;
 	supportSeamlessCubeMaps = GLAD_GL_ARB_seamless_cube_map;
-	supportMSAAFrameBuffer = GLAD_GL_EXT_framebuffer_multisample;
+	supportMSAAFrameBuffer = (GLAD_GL_VERSION_3_0 || GLAD_GL_EXT_framebuffer_multisample);
+	supportMSAAFrameBuffer &= IS_GL_FUNCTION_AVAILABLE(glRenderbufferStorageMultisample);
 	// CC did not exist as an extension before GL4.5, too recent to enforce
 
 	//stick to the theory that reported = exist

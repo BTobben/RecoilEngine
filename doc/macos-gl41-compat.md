@@ -59,11 +59,16 @@ polygon, viewport, scissor, multisample, texture-binding, line, and point
 state. Nested pushes are supported and stack underflow is logged instead of
 dereferencing an unavailable entry point.
 
-Removed fixed-function groups such as current color, lighting, fog, matrix
-transform, display-list, and pixel-transfer state cannot be represented in a
-Core context. A request containing those bits emits a one-time warning; it
-does not claim that removed state was restored. Those callers still need to
-move their data to shaders and buffered geometry.
+Removed fixed-function groups such as current color, lighting, fog,
+display-list, and pixel-transfer state cannot be represented in a Core
+context. A request containing those bits emits a one-time warning; it does
+not claim that removed state was restored. Those callers still need to move
+their data to shaders and buffered geometry.
+
+The legacy model-view, projection, and texture matrix stacks are emulated by
+the engine in Core contexts. Existing matrix calls update those stacks, and
+the standard buffered Core shaders receive the resulting transform through a
+uniform. Compatibility contexts continue to use the native matrix stack.
 
 Startup no longer requires compatibility-only texture-environment support,
 does not call `glShadeModel` in a Core context, and avoids removed Core-profile
@@ -76,13 +81,23 @@ normalized orthographic transform and the font renderer uploads the font's
 view/projection transform. This keeps the menu independent of the removed
 fixed-function matrix stack in a Core context.
 
+Standard RenderBuffer draws upload the emulated matrix-stack transform instead
+of relying on `gl_ModelViewProjectionMatrix`.
+
+OpenGL 3.x functionality promoted from extensions uses the unsuffixed Core
+entry points. This is required on Apple's 4.1 driver, which can expose the
+Core function while leaving the old `ARB` or `EXT` loader alias null. The SMF
+minimap compressed-texture upload and the framebuffer/renderbuffer path are
+covered by this rule. Legacy ARB assembly-program water renderers are disabled
+in a Core context; the GLSL bump-water and basic-water paths remain available.
+
 ## Known limitations
 
 The engine and BAR content can now reach the menu and a playable match on the
 tested Linux GL 4.1 path. This remains an experimental compatibility tier,
 not a claim that every map, widget, or optional effect works on macOS. The Lua
 drawing API still contains compatibility-profile operations such as
-immediate-mode drawing, matrix stacks, alpha test, and client-state vertex
+immediate-mode drawing, alpha test, and client-state vertex
 arrays. Code reached by the 4.1 tier must continue to migrate to the existing
 buffered/shader drawing helpers.
 
@@ -150,6 +165,12 @@ is specifically for OpenGL driver/API diagnostics.
 effect on restart. BAR exposes these as one rendering-mode selector. Vulkan
 is intentionally not advertised until an engine backend exists, but it can
 later be added without redefining the OpenGL compatibility tier.
+
+`tools/scripts/audit-gl41-core.sh` provides a source-level regression gate for
+extension aliases that have Core equivalents and for unguarded OpenGL
+4.2/4.3 entry points. It is intentionally supplemental to runtime smoke tests:
+function availability and content-selected Lua paths can only be proven with
+a real 4.1 Core context.
 
 ## Long-term direction
 
