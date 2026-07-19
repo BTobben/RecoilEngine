@@ -318,9 +318,13 @@ bool LuaOpenGL::PushEntries(lua_State* L)
 	REGISTER_LUA_CFUNC(Blending);
 	REGISTER_LUA_CFUNC(BlendEquation);
 	REGISTER_LUA_CFUNC(BlendFunc);
-	if (GLAD_GL_EXT_blend_equation_separate)
+	// Both entry points have been part of desktop OpenGL core for a long time.
+	// Core-profile drivers (notably macOS) do not have to advertise the older
+	// EXT extension strings, so checking only those strings incorrectly hides
+	// the Lua API even though the functions are available.
+	if (GLAD_GL_VERSION_2_0 || GLAD_GL_EXT_blend_equation_separate)
 		REGISTER_LUA_CFUNC(BlendEquationSeparate);
-	if (GLAD_GL_EXT_blend_func_separate)
+	if (GLAD_GL_VERSION_1_4 || GLAD_GL_EXT_blend_func_separate)
 		REGISTER_LUA_CFUNC(BlendFuncSeparate);
 
 	REGISTER_LUA_CFUNC(Material);
