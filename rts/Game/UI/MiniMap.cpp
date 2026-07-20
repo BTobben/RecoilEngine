@@ -1882,6 +1882,7 @@ void CMiniMap::DrawBackground() const
 
 	readMap->BindMiniMapTextures();
 	bgShader->Enable();
+	bgShader->SetUniformMatrix4x4("coreViewProjectionMatrix", false, projMats[0].m);
 	bgShader->SetUniform("infotexMul", static_cast<float>(infoTextureHandler->IsEnabled()));
 	rb.DrawElements(GL_TRIANGLES);
 	bgShader->Disable();
@@ -2065,4 +2066,3 @@ void CMiniMap::SetClipPlanes(const bool lua) const
 
 
 /******************************************************************************/
-
