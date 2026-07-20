@@ -3,6 +3,7 @@
 #include "glFont.h"
 #include "Rendering/GlobalRendering.h"
 #include "Rendering/GlobalRenderingInfo.h"
+#include "Rendering/GL/LegacyGLState.h"
 #include "Rendering/Shaders/Shader.h"
 #include "System/Log/ILog.h"
 #include "System/SafeUtil.h"
@@ -319,7 +320,10 @@ void CglShaderFontRenderer::PushGLState(const CglFont& fnt)
 	if (fnt.HasColor()) {
 		fontShaderColor->Enable();
 		if (globalRenderingInfo.glContextIsCore) {
-			const CMatrix44f transform = fnt.GetProjMatrix() * fnt.GetViewMatrix();
+			// Match the compatibility shader's gl_ModelViewProjectionMatrix.
+			// LuaIntro and LuaUI deliberately transform the active matrix before
+			// printing (loading-screen pixel scaling is one such caller).
+			const CMatrix44f transform = GL::Legacy::ModelViewProjectionMatrix();
 			fontShaderColor->SetUniformMatrix4x4("transformMatrix", false, transform.m);
 		}
 	}
@@ -327,7 +331,7 @@ void CglShaderFontRenderer::PushGLState(const CglFont& fnt)
 		fontShader->Enable();
 
 	if (!fnt.HasColor() && globalRenderingInfo.glContextIsCore) {
-		const CMatrix44f transform = fnt.GetProjMatrix() * fnt.GetViewMatrix();
+		const CMatrix44f transform = GL::Legacy::ModelViewProjectionMatrix();
 		fontShader->SetUniformMatrix4x4("transformMatrix", false, transform.m);
 	}
 }
