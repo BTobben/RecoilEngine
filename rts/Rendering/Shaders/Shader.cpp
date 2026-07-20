@@ -251,8 +251,8 @@ namespace Shader {
 		if (!defFlags.empty())   EnsureEndsWith(&defFlags,   "\n");
 
 		std::vector<const GLchar*> sources = {
-			"// SHADER VERSION\n",
 			versionStr.c_str(),
+			"// SHADER VERSION\n",
 			"// SHADER FLAGS\n",
 			defFlags.c_str(),
 			"// SHADER SOURCE\n",
