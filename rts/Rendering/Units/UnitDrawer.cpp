@@ -13,6 +13,7 @@
 #include "Map/MapInfo.h"
 #include "Map/ReadMap.h"
 #include "Rendering/Env/IWater.h"
+#include "Rendering/GL/LegacyGLState.h"
 #include "Rendering/GL/SubState.h"
 #include "Rendering/GL/glExtra.h"
 #include "Rendering/GL/RenderBuffers.h"
@@ -490,6 +491,7 @@ void CUnitDrawerGLSL::DrawUnitMiniMapIcons() const
 	}
 
 	icons2DShader->Enable();
+	icons2DShader->SetUniformMatrix4x4("coreViewProjectionMatrix", false, GL::Legacy::ModelViewProjectionMatrix().m);
 	icons2DShader->SetUniform("alphaCtrl", 0.0f, 1.0f, 0.0f, 0.0f); // GL_GREATER > 0.0
 
 	rb.Submit(GL_TRIANGLES);
@@ -600,6 +602,7 @@ void CUnitDrawerGLSL::DrawUnitIcons() const
 	}
 
 	icons3DShader->Enable();
+	icons3DShader->SetUniformMatrix4x4("coreViewProjectionMatrix", false, GL::Legacy::ModelViewProjectionMatrix().m);
 	icons3DShader->SetUniform("alphaCtrl", 0.05f, 1.0f, 0.0f, 0.0f); // GL_GREATER > 0.05
 
 	rb.Submit(GL_TRIANGLES);
@@ -751,13 +754,14 @@ void CUnitDrawerGLSL::DrawUnitIconsScreen() const
 		glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, atlasTexIDs[1]);
 	}
 
-	icons3DShader->Enable();
-	icons3DShader->SetUniform("alphaCtrl", 0.05f, 1.0f, 0.0f, 0.0f); // GL_GREATER > 0.05
+	icons2DShader->Enable();
+	icons2DShader->SetUniformMatrix4x4("coreViewProjectionMatrix", false, GL::Legacy::ModelViewProjectionMatrix().m);
+	icons2DShader->SetUniform("alphaCtrl", 0.05f, 1.0f, 0.0f, 0.0f); // GL_GREATER > 0.05
 
 	rb.Submit(GL_TRIANGLES);
 
-	icons3DShader->SetUniform("alphaCtrl", 0.0f, 0.0f, 0.0f, 1.0f);
-	icons3DShader->Disable();
+	icons2DShader->SetUniform("alphaCtrl", 0.0f, 0.0f, 0.0f, 1.0f);
+	icons2DShader->Disable();
 
 	if (atlasTexIDs[1])
 		glBindTexture(GL_TEXTURE_2D, 0);
@@ -2085,4 +2089,3 @@ void CUnitDrawerGL4::DrawUnitModelBeingBuiltOpaque(const CUnit* unit, bool noLua
 
 	glPopAttrib();
 }
-
