@@ -1,5 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
+#include <cstring>
 #include <string>
 #include <sstream>
 #include <iomanip>
@@ -1573,6 +1574,12 @@ void CGlobalRendering::GetUsableDisplayBounds(SDL_Rect& r, const int* di) const
 
 bool CGlobalRendering::IsExtensionSupported(const char* ext) const
 {
+	// Core profiles may omit extension strings for features promoted into the
+	// OpenGL specification. BAR queries this legacy name before enabling its
+	// GUI compositor, while NPOT textures are mandatory since OpenGL 2.0.
+	if (std::strcmp(ext, "GL_ARB_texture_non_power_of_two") == 0)
+		return GLAD_GL_VERSION_2_0 || GLAD_GL_ARB_texture_non_power_of_two;
+
 	return glExtensions.contains(ext);
 }
 
