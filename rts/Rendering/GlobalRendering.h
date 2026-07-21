@@ -334,6 +334,12 @@ public:
 	 * callers can degrade individual features on OpenGL 4.1 contexts.
 	 */
 	bool supportGL41Core;
+	/**
+	 * True only when OpenGLFeatureLevel=gl41 explicitly selects the reduced
+	 * OpenGL 4.1 route. Unlike supportGL41Core this is a runtime choice,
+	 * not a hardware capability.
+	 */
+	bool useGL41Core;
 	bool supportUniformBuffers;
 	bool supportGLSL420Pack;
 	bool supportComputeShaders;
