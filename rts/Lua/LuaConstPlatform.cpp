@@ -113,6 +113,8 @@ bool LuaConstPlatform::PushEntries(lua_State* L)
 	LuaPushNamedBool(L, "glHaveGL4", globalRendering->haveGL4);
 	/*** @field Platform.glSupportGL41Core boolean */
 	LuaPushNamedBool(L, "glSupportGL41Core", globalRendering->supportGL41Core);
+	/*** @field Platform.glUseGL41Core boolean true when OpenGLFeatureLevel=gl41 explicitly selects the reduced OpenGL 4.1 route */
+	LuaPushNamedBool(L, "glUseGL41Core", globalRendering->useGL41Core);
 	/*** @field Platform.glSupportUniformBuffers boolean */
 	LuaPushNamedBool(L, "glSupportUniformBuffers", globalRendering->supportUniformBuffers);
 	/*** @field Platform.glSupportGLSL420Pack boolean */
@@ -144,7 +146,7 @@ bool LuaConstPlatform::PushEntries(lua_State* L)
 	LuaPushNamedString(L, "osName", Platform::GetOSNameStr());
 	/*** @field Platform.osVersion string */
 	LuaPushNamedString(L, "osVersion", Platform::GetOSVersionStr());
-	/*** @field Platform.osFamily "Windows"|"Linux"|"MacOSX"|"FreeBSD"|"Unknown" */
+	/*** @field Platform.osFamily "Windows"|"Linux"|"MacOS"|"FreeBSD"|"Unknown" */
 	LuaPushNamedString(L, "osFamily", Platform::GetOSFamilyStr());
 	/*** @field Platform.architecture string CPU architecture (e.g., "x86_64", "arm64") */
 	LuaPushNamedString(L, "architecture", Platform::GetArchitectureStr());
