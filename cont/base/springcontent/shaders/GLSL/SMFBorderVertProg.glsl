@@ -4,6 +4,7 @@ in vec3 vertexPos;
 in vec4 vertexCol;
 
 uniform sampler2D heightMapTex;
+uniform mat4 coreViewProjectionMatrix;
 uniform float borderMinHeight;
 uniform ivec2 texSquare; //TODO convert to texture array
 uniform vec4 mapSize; // mapSize, 1.0/mapSize
@@ -45,6 +46,5 @@ void main() {
 		dot(vertexWorldPos, detailPlaneT)
 	);
 
-	gl_Position = gl_ModelViewProjectionMatrix * vertexWorldPos;
+	gl_Position = coreViewProjectionMatrix * vertexWorldPos;
 }
-

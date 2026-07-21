@@ -362,6 +362,7 @@ void CSMFGroundDrawer::DrawBorder(const DrawPass::e drawPass)
 	glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
 
 	borderShader->Enable();
+	borderShader->SetUniformMatrix4x4("coreViewProjectionMatrix", false, camera->GetViewProjectionMatrix().m);
 	borderShader->SetUniform("borderMinHeight", std::min(readMap->GetInitMinHeight(), -500.0f));
 	meshDrawer->DrawBorderMesh(drawPass);
 	borderShader->Disable();
