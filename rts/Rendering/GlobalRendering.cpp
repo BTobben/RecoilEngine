@@ -227,6 +227,7 @@ CR_REG_METADATA(CGlobalRendering, (
 	CR_IGNORED(supportSeamlessCubeMaps),
 	CR_IGNORED(supportFragDepthLayout),
 	CR_IGNORED(supportGL41Core),
+	CR_IGNORED(useGL41Core),
 	CR_IGNORED(supportUniformBuffers),
 	CR_IGNORED(supportGLSL420Pack),
 	CR_IGNORED(supportComputeShaders),
@@ -374,6 +375,7 @@ CGlobalRendering::CGlobalRendering()
 	, supportSeamlessCubeMaps(false)
 	, supportFragDepthLayout(false)
 	, supportGL41Core(false)
+	, useGL41Core(false)
 	, supportUniformBuffers(false)
 	, supportGLSL420Pack(false)
 	, supportComputeShaders(false)
@@ -411,13 +413,22 @@ CGlobalRendering::CGlobalRendering()
 	}
 
 	const std::string requestedFeatureLevel = configHandler->GetString("OpenGLFeatureLevel");
-	if (requestedFeatureLevel != "auto" && requestedFeatureLevel != "full" && requestedFeatureLevel != "gl41") {
+	const bool validFeatureLevel = (
+		requestedFeatureLevel == "auto" ||
+		requestedFeatureLevel == "full" ||
+		requestedFeatureLevel == "gl41"
+	);
+
+	if (!validFeatureLevel) {
 		LOG_L(L_WARNING, "[GR] OpenGLFeatureLevel=\"%s\" is invalid; falling back to auto", requestedFeatureLevel.c_str());
 		configHandler->Set("OpenGLFeatureLevel", std::string("auto"));
 	}
 
-	LOG("[GR] renderer selection: backend=%s OpenGLFeatureLevel=%s ForceDisableGL4=%d ForceDisablePersistentMapping=%d",
-		requestedBackend.c_str(), requestedFeatureLevel.c_str(), forceDisableGL4, forceDisablePersistentMapping);
+	const std::string selectedFeatureLevel = validFeatureLevel ? requestedFeatureLevel : "auto";
+	useGL41Core = (selectedFeatureLevel == "gl41");
+
+	LOG("[GR] renderer selection: backend=%s OpenGLFeatureLevel=%s useGL41Core=%d ForceDisableGL4=%d ForceDisablePersistentMapping=%d",
+		requestedBackend.c_str(), selectedFeatureLevel.c_str(), useGL41Core, forceDisableGL4, forceDisablePersistentMapping);
 
 #ifdef _WIN32
 	dwmApiLib = std::unique_ptr<SharedLib>(SharedLib::Instantiate("dwmapi"));
@@ -1188,6 +1199,7 @@ void CGlobalRendering::LogVersionInfo(const char* sdlVersionStr, const char* glV
 	LOG("\tInitialized OpenGL Context: %i.%i (%s)", globalRenderingInfo.glContextVersion.x, globalRenderingInfo.glContextVersion.y, globalRenderingInfo.glContextIsCore ? "Core" : "Compat");
 	LOG("\tGLSL shader support       : %i", true);
 	LOG("\tGL 4.1 Core context       : %i", supportGL41Core);
+	LOG("\tGL 4.1 reduced route      : %i", useGL41Core);
 	LOG("\tuniform buffer support    : %i", supportUniformBuffers);
 	LOG("\tGLSL 420pack bindings     : %i", supportGLSL420Pack);
 	LOG("\tcompute shader support    : %i", supportComputeShaders);
