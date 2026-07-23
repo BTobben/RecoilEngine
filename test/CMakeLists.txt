@@ -90,6 +90,20 @@ macro (add_spring_test target sources libraries flags)
 endmacro()
 
 ################################################################################
+### LuaOpenGL Core primitive batching
+	set(test_name LuaOpenGLCoreBatch)
+	set(test_src
+			"${CMAKE_CURRENT_SOURCE_DIR}/engine/Lua/testLuaOpenGLCoreBatch.cpp"
+			${test_Catch_main}
+		)
+
+	set(test_libs
+			""
+		)
+
+	add_spring_test(${test_name} "${test_src}" "${test_libs}" "")
+
+################################################################################
 ### UDPListener
 # disabled for travis: https://springrts.com/mantis/view.php?id=5014
 if(NOT DEFINED ENV{CI})
