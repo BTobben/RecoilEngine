@@ -1767,7 +1767,6 @@ static void HandleDDSMipmap(GLenum target, int32_t numEmbeddedLevels, uint32_t m
 uint32_t CBitmap::CreateDDSTexture(const GL::TextureCreationParams& tcp) const
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	glPushAttrib(GL_TEXTURE_BIT);
 
 	auto texID = tcp.texID;
 
@@ -1780,9 +1779,8 @@ uint32_t CBitmap::CreateDDSTexture(const GL::TextureCreationParams& tcp) const
 			texID = 0;
 			break;
 
-		case nv_dds::TextureFlat:    // 1D, 2D, and rectangle textures
-			glEnable(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, texID);
+		case nv_dds::TextureFlat: {  // 1D, 2D, and rectangle textures
+			auto binding = GL::TexBind(GL_TEXTURE_2D, texID);
 
 			if (!ddsimage.upload_texture2D(0, GL_TEXTURE_2D)) {
 				glDeleteTextures(1, &texID);
@@ -1796,11 +1794,10 @@ uint32_t CBitmap::CreateDDSTexture(const GL::TextureCreationParams& tcp) const
 				glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, tcp.aniso);
 
 			HandleDDSMipmap(GL_TEXTURE_2D, ddsimage.get_num_mipmaps(), tcp.GetMinFilter(ddsimage.get_num_mipmaps()));
-			break;
+		} break;
 
-		case nv_dds::Texture3D:
-			glEnable(GL_TEXTURE_3D);
-			glBindTexture(GL_TEXTURE_3D, texID);
+		case nv_dds::Texture3D: {
+			auto binding = GL::TexBind(GL_TEXTURE_3D, texID);
 
 			if (!ddsimage.upload_texture3D()) {
 				glDeleteTextures(1, &texID);
@@ -1812,11 +1809,10 @@ uint32_t CBitmap::CreateDDSTexture(const GL::TextureCreationParams& tcp) const
 				glTexParameterf(GL_TEXTURE_3D, GL_TEXTURE_LOD_BIAS, tcp.lodBias);
 
 			HandleDDSMipmap(GL_TEXTURE_3D, ddsimage.get_num_mipmaps(), tcp.GetMinFilter(ddsimage.get_num_mipmaps()));
-			break;
+		} break;
 
-		case nv_dds::TextureCubemap:
-			glEnable(GL_TEXTURE_CUBE_MAP);
-			glBindTexture(GL_TEXTURE_CUBE_MAP, texID);
+		case nv_dds::TextureCubemap: {
+			auto binding = GL::TexBind(GL_TEXTURE_CUBE_MAP, texID);
 
 			if (!ddsimage.upload_textureCubemap()) {
 				glDeleteTextures(1, &texID);
@@ -1830,14 +1826,13 @@ uint32_t CBitmap::CreateDDSTexture(const GL::TextureCreationParams& tcp) const
 				glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_ANISOTROPY_EXT, tcp.aniso);
 
 			HandleDDSMipmap(GL_TEXTURE_CUBE_MAP, ddsimage.get_num_mipmaps(), tcp.GetMinFilter(ddsimage.get_num_mipmaps()));
-			break;
+		} break;
 
 		default:
 			assert(false);
 			break;
 	}
 
-	glPopAttrib();
 	return texID;
 }
 #else  // !HEADLESS
