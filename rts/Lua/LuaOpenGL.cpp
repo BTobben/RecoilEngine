@@ -19,6 +19,7 @@
 #include <fmt/format.h>
 
 #include "LuaOpenGL.h"
+#include "LuaOpenGLCoreBatch.h"
 
 #include "LuaInclude.h"
 #include "LuaContextData.h"
@@ -186,12 +187,68 @@ struct CoreBeginEndVertex {
 	SColor color;
 };
 
-thread_local bool coreBeginEndActive = false;
-thread_local bool coreBeginEndHasTexCoords = false;
+struct CoreBeginEndContext {
+	CoreBeginEndContext(
+		const GLenum sourceMode,
+		const LuaOpenGLCore::PrimitiveMode coreMode,
+		const bool inheritedTexCoords
+	)
+		: primitiveMode(sourceMode)
+		, hasTexCoords(inheritedTexCoords)
+		, assembler(coreMode)
+	{}
+
+	void Reset(
+		const GLenum sourceMode,
+		const LuaOpenGLCore::PrimitiveMode coreMode,
+		const bool inheritedTexCoords
+	) {
+		primitiveMode = sourceMode;
+		hasTexCoords = inheritedTexCoords;
+		assembler.Reset(coreMode);
+	}
+
+	GLenum primitiveMode;
+	bool hasTexCoords;
+	LuaOpenGLCore::PrimitiveAssembler<CoreBeginEndVertex> assembler;
+};
+
 thread_local float2 coreBeginEndTexCoord;
-thread_local std::vector<CoreBeginEndVertex> coreBeginEndVertices;
+thread_local std::vector<CoreBeginEndContext> coreBeginEndContexts;
+thread_local std::size_t coreBeginEndDepth = 0;
+thread_local LuaOpenGLCore::PrimitiveBatch<CoreBeginEndVertex> coreBeginEndBatch;
 thread_local std::vector<VA_TYPE_C> coreBeginEndColorVertices;
 thread_local std::vector<VA_TYPE_TC> coreBeginEndTexColorVertices;
+
+std::optional<LuaOpenGLCore::PrimitiveMode> GetCorePrimitiveMode(const GLenum primitiveMode)
+{
+	using LuaOpenGLCore::PrimitiveMode;
+
+	switch (primitiveMode) {
+		case GL_POINTS:         return PrimitiveMode::Points;
+		case GL_LINES:          return PrimitiveMode::Lines;
+		case GL_LINE_LOOP:      return PrimitiveMode::LineLoop;
+		case GL_LINE_STRIP:     return PrimitiveMode::LineStrip;
+		case GL_TRIANGLES:      return PrimitiveMode::Triangles;
+		case GL_TRIANGLE_STRIP: return PrimitiveMode::TriangleStrip;
+		case GL_TRIANGLE_FAN:   return PrimitiveMode::TriangleFan;
+		case GL_QUADS:          return PrimitiveMode::Quads;
+		case GL_QUAD_STRIP:     return PrimitiveMode::QuadStrip;
+		case GL_POLYGON:        return PrimitiveMode::Polygon;
+		default:                return std::nullopt;
+	}
+}
+
+GLenum GetCoreDrawMode(const LuaOpenGLCore::PrimitiveMode primitiveMode)
+{
+	using LuaOpenGLCore::PrimitiveMode;
+
+	switch (primitiveMode) {
+		case PrimitiveMode::Points: return GL_POINTS;
+		case PrimitiveMode::Lines: return GL_LINES;
+		default: return GL_TRIANGLES;
+	}
+}
 
 template<typename VertexType>
 void SubmitCoreBeginEndVertices(const GLenum primitiveMode, const std::vector<VertexType>& vertices)
@@ -204,56 +261,28 @@ void SubmitCoreBeginEndVertices(const GLenum primitiveMode, const std::vector<Ve
 
 	renderBuffer.AssertSubmission();
 
-	GLenum drawMode = primitiveMode;
-	if (primitiveMode == GL_QUADS) {
-		if ((vertices.size() % 4) != 0) {
-			LOG_L(L_WARNING, "gl.BeginEnd(GL_QUADS): ignoring %zu trailing vertices", vertices.size() % 4);
-		}
-
-		for (std::size_t index = 0; index + 3 < vertices.size(); index += 4) {
-			renderBuffer.AddQuadTriangles(
-				vertices[index + 0],
-				vertices[index + 1],
-				vertices[index + 2],
-				vertices[index + 3]
-			);
-		}
-		drawMode = GL_TRIANGLES;
-	} else if (primitiveMode == GL_QUAD_STRIP) {
-		if ((vertices.size() % 2) != 0) {
-			LOG_L(L_WARNING, "gl.BeginEnd(GL_QUAD_STRIP): ignoring one trailing vertex");
-		}
-
-		for (std::size_t index = 0; index + 3 < vertices.size(); index += 2) {
-			renderBuffer.AddQuadTriangles(
-				vertices[index + 0],
-				vertices[index + 1],
-				vertices[index + 3],
-				vertices[index + 2]
-			);
-		}
-		drawMode = GL_TRIANGLES;
-	} else if (primitiveMode == GL_POLYGON) {
-		renderBuffer.AddVertices(vertices.begin(), vertices.end());
-		drawMode = GL_TRIANGLE_FAN;
-	} else {
-		renderBuffer.AddVertices(vertices.begin(), vertices.end());
-	}
+	renderBuffer.AddVertices(vertices.begin(), vertices.end());
 
 	shader.Enable();
-	if (primitiveMode == GL_QUADS || primitiveMode == GL_QUAD_STRIP)
-		renderBuffer.DrawElements(drawMode);
-	else
-		renderBuffer.DrawArrays(drawMode);
+	renderBuffer.DrawArrays(primitiveMode);
 	shader.Disable();
 }
 
-void SubmitCoreBeginEnd(const GLenum primitiveMode)
+void SubmitCoreBeginEnd(CoreBeginEndContext& context, const bool finish)
 {
-	if (coreBeginEndHasTexCoords) {
+	context.assembler.Flush(finish, coreBeginEndBatch);
+	if (coreBeginEndBatch.discardedVertices > 0 && context.primitiveMode == GL_QUADS) {
+		LOG_L(L_WARNING, "gl.BeginEnd(GL_QUADS): ignoring %zu trailing vertices", coreBeginEndBatch.discardedVertices);
+	} else if (coreBeginEndBatch.discardedVertices > 0 && context.primitiveMode == GL_QUAD_STRIP) {
+		LOG_L(L_WARNING, "gl.BeginEnd(GL_QUAD_STRIP): ignoring one trailing vertex");
+	}
+
+	const GLenum drawMode = GetCoreDrawMode(coreBeginEndBatch.mode);
+
+	if (context.hasTexCoords) {
 		coreBeginEndTexColorVertices.clear();
-		coreBeginEndTexColorVertices.reserve(coreBeginEndVertices.size());
-		for (const CoreBeginEndVertex& vertex: coreBeginEndVertices) {
+		coreBeginEndTexColorVertices.reserve(coreBeginEndBatch.vertices.size());
+		for (const CoreBeginEndVertex& vertex: coreBeginEndBatch.vertices) {
 			coreBeginEndTexColorVertices.push_back({
 				vertex.pos,
 				vertex.texCoord.x,
@@ -261,24 +290,48 @@ void SubmitCoreBeginEnd(const GLenum primitiveMode)
 				vertex.color
 			});
 		}
-		SubmitCoreBeginEndVertices(primitiveMode, coreBeginEndTexColorVertices);
+		SubmitCoreBeginEndVertices(drawMode, coreBeginEndTexColorVertices);
 		return;
 	}
 
 	coreBeginEndColorVertices.clear();
-	coreBeginEndColorVertices.reserve(coreBeginEndVertices.size());
-	for (const CoreBeginEndVertex& vertex: coreBeginEndVertices)
+	coreBeginEndColorVertices.reserve(coreBeginEndBatch.vertices.size());
+	for (const CoreBeginEndVertex& vertex: coreBeginEndBatch.vertices)
 		coreBeginEndColorVertices.push_back({vertex.pos, vertex.color});
-	SubmitCoreBeginEndVertices(primitiveMode, coreBeginEndColorVertices);
+	SubmitCoreBeginEndVertices(drawMode, coreBeginEndColorVertices);
+}
+
+CoreBeginEndContext& GetCoreBeginEndContext()
+{
+	return coreBeginEndContexts[coreBeginEndDepth - 1];
+}
+
+void PushCoreBeginEndContext(
+	const GLenum sourceMode,
+	const LuaOpenGLCore::PrimitiveMode coreMode,
+	const bool inheritedTexCoords
+) {
+	if (coreBeginEndDepth == coreBeginEndContexts.size()) {
+		coreBeginEndContexts.emplace_back(sourceMode, coreMode, inheritedTexCoords);
+	} else {
+		coreBeginEndContexts[coreBeginEndDepth].Reset(sourceMode, coreMode, inheritedTexCoords);
+	}
+
+	++coreBeginEndDepth;
 }
 
 void AddCoreBeginEndVertex(const float x, const float y, const float z, const SColor& color)
 {
-	coreBeginEndVertices.push_back({
+	GetCoreBeginEndContext().assembler.AddVertex({
 		{x, y, z},
 		coreBeginEndTexCoord,
 		color
 	});
+}
+
+bool IsCoreBeginEndActive()
+{
+	return coreBeginEndDepth > 0;
 }
 
 } // namespace
@@ -2506,26 +2559,33 @@ int LuaOpenGL::BeginEnd(lua_State* L)
 	}
 
 	if (globalRenderingInfo.glContextIsCore) {
-		if (coreBeginEndActive)
-			luaL_error(L, "Nested gl.BeginEnd calls are not supported");
+		const auto corePrimitiveMode = GetCorePrimitiveMode(primMode);
+		if (!corePrimitiveMode.has_value())
+			luaL_error(L, "Unsupported primitive type passed to gl.BeginEnd()");
 
-		coreBeginEndActive = true;
-		coreBeginEndHasTexCoords = false;
-		coreBeginEndTexCoord = {};
-		coreBeginEndVertices.clear();
+		const bool isNested = IsCoreBeginEndActive();
+		const bool inheritedTexCoords = isNested && GetCoreBeginEndContext().hasTexCoords;
+		if (isNested)
+			SubmitCoreBeginEnd(GetCoreBeginEndContext(), false);
+		else
+			coreBeginEndTexCoord = {};
+
+		PushCoreBeginEndContext(primMode, *corePrimitiveMode, inheritedTexCoords);
 
 		const int error = lua_pcall(L, (args - 2), 0, 0);
-		coreBeginEndActive = false;
+		CoreBeginEndContext& context = GetCoreBeginEndContext();
 
 		if (error != 0) {
-			coreBeginEndVertices.clear();
+			--coreBeginEndDepth;
 			LOG_L(L_ERROR, "gl.BeginEnd: error(%i) = %s",
 					error, lua_tostring(L, -1));
 			lua_error(L);
 		}
 
-		SubmitCoreBeginEnd(primMode);
-		coreBeginEndVertices.clear();
+		SubmitCoreBeginEnd(context, true);
+		--coreBeginEndDepth;
+		if (context.hasTexCoords && IsCoreBeginEndActive())
+			GetCoreBeginEndContext().hasTexCoords = true;
 		return 0;
 	}
 
@@ -2588,7 +2648,7 @@ int LuaOpenGL::Vertex(lua_State* L)
 		const float y = lua_tofloat(L, -1);
 		lua_rawgeti(L, 1, 3);
 		if (!lua_isnumber(L, -1)) {
-			if (coreBeginEndActive) {
+			if (IsCoreBeginEndActive()) {
 				AddCoreBeginEndVertex(x, y, 0.0f, currentColor);
 				return 0;
 			}
@@ -2598,7 +2658,7 @@ int LuaOpenGL::Vertex(lua_State* L)
 		const float z = lua_tofloat(L, -1);
 		lua_rawgeti(L, 1, 4);
 		if (!lua_isnumber(L, -1)) {
-			if (coreBeginEndActive) {
+			if (IsCoreBeginEndActive()) {
 				AddCoreBeginEndVertex(x, y, z, currentColor);
 				return 0;
 			}
@@ -2606,7 +2666,7 @@ int LuaOpenGL::Vertex(lua_State* L)
 			return 0;
 		}
 		const float w = lua_tofloat(L, -1);
-		if (coreBeginEndActive) {
+		if (IsCoreBeginEndActive()) {
 			const float inverseW = (w == 0.0f) ? 1.0f : (1.0f / w);
 			AddCoreBeginEndVertex(x * inverseW, y * inverseW, z * inverseW, currentColor);
 			return 0;
@@ -2619,7 +2679,7 @@ int LuaOpenGL::Vertex(lua_State* L)
 		const float x = luaL_checkfloat(L, 1);
 		const float y = luaL_checkfloat(L, 2);
 		const float z = luaL_checkfloat(L, 3);
-		if (coreBeginEndActive) {
+		if (IsCoreBeginEndActive()) {
 			AddCoreBeginEndVertex(x, y, z, currentColor);
 			return 0;
 		}
@@ -2628,7 +2688,7 @@ int LuaOpenGL::Vertex(lua_State* L)
 	else if (args == 2) {
 		const float x = luaL_checkfloat(L, 1);
 		const float y = luaL_checkfloat(L, 2);
-		if (coreBeginEndActive) {
+		if (IsCoreBeginEndActive()) {
 			AddCoreBeginEndVertex(x, y, 0.0f, currentColor);
 			return 0;
 		}
@@ -2639,7 +2699,7 @@ int LuaOpenGL::Vertex(lua_State* L)
 		const float y = luaL_checkfloat(L, 2);
 		const float z = luaL_checkfloat(L, 3);
 		const float w = luaL_checkfloat(L, 4);
-		if (coreBeginEndActive) {
+		if (IsCoreBeginEndActive()) {
 			const float inverseW = (w == 0.0f) ? 1.0f : (1.0f / w);
 			AddCoreBeginEndVertex(x * inverseW, y * inverseW, z * inverseW, currentColor);
 			return 0;
@@ -2733,13 +2793,13 @@ int LuaOpenGL::TexCoord(lua_State* L)
 	const int args = lua_gettop(L); // number of arguments
 	const auto setCoreTexCoord = [](const float s, const float t) {
 		coreBeginEndTexCoord = {s, t};
-		coreBeginEndHasTexCoords = true;
+		GetCoreBeginEndContext().hasTexCoords = true;
 	};
 
 	if (args == 1) {
 		if (lua_isnumber(L, 1)) {
 			const float x = lua_tofloat(L, 1);
-			if (coreBeginEndActive) {
+			if (IsCoreBeginEndActive()) {
 				setCoreTexCoord(x, 0.0f);
 				return 0;
 			}
@@ -2756,7 +2816,7 @@ int LuaOpenGL::TexCoord(lua_State* L)
 		const float x = lua_tofloat(L, -1);
 		lua_rawgeti(L, 1, 2);
 		if (!lua_isnumber(L, -1)) {
-			if (coreBeginEndActive) {
+			if (IsCoreBeginEndActive()) {
 				setCoreTexCoord(x, 0.0f);
 				return 0;
 			}
@@ -2766,7 +2826,7 @@ int LuaOpenGL::TexCoord(lua_State* L)
 		const float y = lua_tofloat(L, -1);
 		lua_rawgeti(L, 1, 3);
 		if (!lua_isnumber(L, -1)) {
-			if (coreBeginEndActive) {
+			if (IsCoreBeginEndActive()) {
 				setCoreTexCoord(x, y);
 				return 0;
 			}
@@ -2776,7 +2836,7 @@ int LuaOpenGL::TexCoord(lua_State* L)
 		const float z = lua_tofloat(L, -1);
 		lua_rawgeti(L, 1, 4);
 		if (!lua_isnumber(L, -1)) {
-			if (coreBeginEndActive) {
+			if (IsCoreBeginEndActive()) {
 				setCoreTexCoord(x, y);
 				return 0;
 			}
@@ -2784,7 +2844,7 @@ int LuaOpenGL::TexCoord(lua_State* L)
 			return 0;
 		}
 		const float w = lua_tofloat(L, -1);
-		if (coreBeginEndActive) {
+		if (IsCoreBeginEndActive()) {
 			setCoreTexCoord(x, y);
 			return 0;
 		}
@@ -2795,7 +2855,7 @@ int LuaOpenGL::TexCoord(lua_State* L)
 	if (args == 2) {
 		const float x = luaL_checkfloat(L, 1);
 		const float y = luaL_checkfloat(L, 2);
-		if (coreBeginEndActive) {
+		if (IsCoreBeginEndActive()) {
 			setCoreTexCoord(x, y);
 			return 0;
 		}
@@ -2805,7 +2865,7 @@ int LuaOpenGL::TexCoord(lua_State* L)
 		const float x = luaL_checkfloat(L, 1);
 		const float y = luaL_checkfloat(L, 2);
 		const float z = luaL_checkfloat(L, 3);
-		if (coreBeginEndActive) {
+		if (IsCoreBeginEndActive()) {
 			setCoreTexCoord(x, y);
 			return 0;
 		}
@@ -2816,7 +2876,7 @@ int LuaOpenGL::TexCoord(lua_State* L)
 		const float y = luaL_checkfloat(L, 2);
 		const float z = luaL_checkfloat(L, 3);
 		const float w = luaL_checkfloat(L, 4);
-		if (coreBeginEndActive) {
+		if (IsCoreBeginEndActive()) {
 			setCoreTexCoord(x, y);
 			return 0;
 		}
