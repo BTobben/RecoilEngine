@@ -177,6 +177,51 @@
 using namespace std;
 using namespace nv_dds;
 
+namespace {
+
+bool GetUncompressedUploadFormats(
+    const GLenum ddsFormat,
+    GLenum& internalFormat,
+    GLenum& externalFormat,
+    bool& luminanceSwizzle
+) {
+    externalFormat = ddsFormat;
+    luminanceSwizzle = false;
+
+    switch (ddsFormat) {
+        case GL_BGRA: {
+            internalFormat = GL_RGBA8;
+        } break;
+        case GL_BGR: {
+            internalFormat = GL_RGB8;
+        } break;
+        case GL_LUMINANCE: {
+            // GL_LUMINANCE and the legacy numeric component-count internal
+            // formats are not valid in core profiles.
+            internalFormat = GL_R8;
+            externalFormat = GL_RED;
+            luminanceSwizzle = true;
+        } break;
+        default: {
+            assert(false);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void ConfigureLuminanceSwizzle(const GLenum target, const bool luminanceSwizzle)
+{
+    if (!luminanceSwizzle)
+        return;
+
+    const GLint swizzle[] = {GL_RED, GL_RED, GL_RED, GL_ONE};
+    glTexParameteriv(target, GL_TEXTURE_SWIZZLE_RGBA, swizzle);
+}
+
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // CDDSImage public functions
 
@@ -760,6 +805,13 @@ bool CDDSImage::upload_texture1D() const
     }
     else
     {
+        GLenum internalFormat;
+        GLenum externalFormat;
+        bool luminanceSwizzle;
+        if (!GetUncompressedUploadFormats(m_format, internalFormat, externalFormat, luminanceSwizzle))
+            return false;
+        ConfigureLuminanceSwizzle(GL_TEXTURE_1D, luminanceSwizzle);
+
         GLint alignment = -1;
         if (!is_dword_aligned())
         {
@@ -767,16 +819,16 @@ bool CDDSImage::upload_texture1D() const
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         }
 
-        glTexImage1D(GL_TEXTURE_1D, 0, m_components, baseImage.get_width(), 0,
-            m_format, GL_UNSIGNED_BYTE, baseImage);
+        glTexImage1D(GL_TEXTURE_1D, 0, internalFormat, baseImage.get_width(), 0,
+            externalFormat, GL_UNSIGNED_BYTE, baseImage);
 
         // load all mipmaps
         for (unsigned int i = 0; i < baseImage.get_num_mipmaps(); i++)
         {
             const CSurface &mipmap = baseImage.get_mipmap(i);
 
-            glTexImage1D(GL_TEXTURE_1D, i+1, m_components,
-                mipmap.get_width(), 0, m_format, GL_UNSIGNED_BYTE, mipmap);
+            glTexImage1D(GL_TEXTURE_1D, i+1, internalFormat,
+                mipmap.get_width(), 0, externalFormat, GL_UNSIGNED_BYTE, mipmap);
         }
 
         if (alignment != -1)
@@ -831,6 +883,17 @@ bool CDDSImage::upload_texture2D(unsigned int imageIndex, int target) const
     }
     else
     {
+        GLenum internalFormat;
+        GLenum externalFormat;
+        bool luminanceSwizzle;
+        if (!GetUncompressedUploadFormats(m_format, internalFormat, externalFormat, luminanceSwizzle))
+            return false;
+        const GLenum parameterTarget =
+            (target >= GL_TEXTURE_CUBE_MAP_POSITIVE_X_ARB && target <= GL_TEXTURE_CUBE_MAP_NEGATIVE_Z_ARB)
+                ? GL_TEXTURE_CUBE_MAP
+                : target;
+        ConfigureLuminanceSwizzle(parameterTarget, luminanceSwizzle);
+
         GLint alignment = -1;
         if (!is_dword_aligned())
         {
@@ -838,8 +901,8 @@ bool CDDSImage::upload_texture2D(unsigned int imageIndex, int target) const
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         }
 
-        glTexImage2D(target, 0, m_components, image.get_width(),
-            image.get_height(), 0, m_format, GL_UNSIGNED_BYTE,
+        glTexImage2D(target, 0, internalFormat, image.get_width(),
+            image.get_height(), 0, externalFormat, GL_UNSIGNED_BYTE,
             image);
 
         // load all mipmaps
@@ -847,8 +910,8 @@ bool CDDSImage::upload_texture2D(unsigned int imageIndex, int target) const
         {
             const CSurface &mipmap = image.get_mipmap(i);
 
-            glTexImage2D(target, i+1, m_components, mipmap.get_width(),
-                mipmap.get_height(), 0, m_format, GL_UNSIGNED_BYTE, mipmap);
+            glTexImage2D(target, i+1, internalFormat, mipmap.get_width(),
+                mipmap.get_height(), 0, externalFormat, GL_UNSIGNED_BYTE, mipmap);
         }
 
         if (alignment != -1)
@@ -888,6 +951,13 @@ bool CDDSImage::upload_texture3D() const
     }
     else
     {
+        GLenum internalFormat;
+        GLenum externalFormat;
+        bool luminanceSwizzle;
+        if (!GetUncompressedUploadFormats(m_format, internalFormat, externalFormat, luminanceSwizzle))
+            return false;
+        ConfigureLuminanceSwizzle(GL_TEXTURE_3D, luminanceSwizzle);
+
         GLint alignment = -1;
         if (!is_dword_aligned())
         {
@@ -895,8 +965,8 @@ bool CDDSImage::upload_texture3D() const
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         }
 
-        glTexImage3D(GL_TEXTURE_3D, 0, m_components, baseImage.get_width(),
-            baseImage.get_height(), baseImage.get_depth(), 0, m_format,
+        glTexImage3D(GL_TEXTURE_3D, 0, internalFormat, baseImage.get_width(),
+            baseImage.get_height(), baseImage.get_depth(), 0, externalFormat,
             GL_UNSIGNED_BYTE, baseImage);
 
         // load all mipmap volumes
@@ -904,9 +974,9 @@ bool CDDSImage::upload_texture3D() const
         {
             const CSurface &mipmap = baseImage.get_mipmap(i);
 
-            glTexImage3D(GL_TEXTURE_3D, i+1, m_components,
+            glTexImage3D(GL_TEXTURE_3D, i+1, internalFormat,
                 mipmap.get_width(), mipmap.get_height(), mipmap.get_depth(), 0,
-                m_format, GL_UNSIGNED_BYTE,  mipmap);
+                externalFormat, GL_UNSIGNED_BYTE,  mipmap);
         }
 
         if (alignment != -1)
@@ -1381,4 +1451,3 @@ void CSurface::clear()
 	delete [] m_pixels;
 	m_pixels = nullptr;
 }
-
