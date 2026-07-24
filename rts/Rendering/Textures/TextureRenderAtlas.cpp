@@ -328,7 +328,7 @@ bool CTextureRenderAtlas::DumpTexture(const std::string& fileExt) const
 		LOG_L(L_ERROR, "[CTextureRenderAtlas::%s] Can't dump invalid %s atlas", __func__, atlasName.c_str());
 		return false;
 	}
-	const auto numLevels = atlasAllocator->GetNumTexLevels();
+	const auto numLevels = globalRendering->useGL41Core ? 1 : atlasAllocator->GetNumTexLevels();
 	const auto numPages = atlasAllocator->GetNumPages();
 
 	if (numPages > 1) {
@@ -364,7 +364,10 @@ bool CTextureRenderAtlas::CreateAtlasTextureCPU()
 		return false;
 	}
 
-	const auto numLevels = atlasAllocator->GetNumTexLevels();
+	// Apple Intel GL drivers can defer render-atlas mipmap work until the first
+	// texture bind.  Keep the core-safe CPU route to a single uploaded level so
+	// it does not enqueue glGenerateMipmap work that may later wedge the GPU ring.
+	static constexpr int numLevels = 1;
 	const auto numPages = atlasAllocator->GetNumPages();
 	const auto& atlasSize = atlasAllocator->GetAtlasSize();
 
@@ -461,17 +464,15 @@ bool CTextureRenderAtlas::CreateAtlasTextureCPU()
 		const auto* texture = static_cast<GL::Texture2DArray*>(atlasTex.get());
 		for (uint32_t page = 0; page < numPages; ++page)
 			texture->UploadImage(atlasPages[page].data(), page);
-		texture->ProduceMipmaps();
 	} else {
 		atlasTex = std::make_unique<GL::Texture2D>(atlasSize, glInternalType, tcp, false);
 		auto binding = atlasTex->ScopedBind();
 		const auto* texture = static_cast<GL::Texture2D*>(atlasTex.get());
 		texture->UploadImage(atlasPages.front().data());
-		texture->ProduceMipmaps();
 	}
 
 	atlasRendered = (atlasTex && atlasTex->GetId() > 0);
-	LOG_L(L_INFO, "CTextureRenderAtlas::%s() atlas=%s atlasRendered=%d", __func__, atlasName.c_str(), atlasRendered);
+	LOG_L(L_INFO, "CTextureRenderAtlas::%s() atlas=%s size=<%u,%u> pages=%u sources=" _STPF_ "u levels=%d atlasRendered=%d", __func__, atlasName.c_str(), atlasSize.x, atlasSize.y, numPages, static_cast<unsigned long long>(filenameToTexID.size()), numLevels, atlasRendered);
 
 	if (!atlasRendered)
 		return false;
