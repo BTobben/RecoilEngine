@@ -72,10 +72,12 @@ private:
 
 
 	bool AddTexFromBitmapRaw(const std::string& name, const CBitmap& bm, const float4& subTexCoords, const std::string& refFileName);
+	bool CreateAtlasTextureCPU();
 
 	struct FileTexEntry {
 		uint32_t texID;
 		uint32_t stableIdx;
+		std::unique_ptr<CBitmap> bitmap;
 	};
 	spring::unordered_map<std::string, FileTexEntry> filenameToTexID;
 	spring::unordered_map<std::string, UniqueSubTexture> uniqueSubTextureMap;

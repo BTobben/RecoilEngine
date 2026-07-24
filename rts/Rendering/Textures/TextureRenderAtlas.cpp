@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <limits>
+#include <vector>
 
 #include "LegacyAtlasAlloc.h"
 #include "QuadtreeAtlasAlloc.h"
@@ -187,7 +190,12 @@ bool CTextureRenderAtlas::AddTexFromBitmapRaw(const std::string& name, const CBi
 	if (it == filenameToTexID.end()) {
 		// Assign stable index at insertion time so all icons sharing a file get the same index
 		const uint32_t stableIdx = static_cast<uint32_t>(filenameToTexID.size());
-		it = filenameToTexID.emplace(refFileName, FileTexEntry{ bm.CreateMipMapTexture(), stableIdx }).first;
+		std::unique_ptr<CBitmap> bitmap;
+		if (globalRendering->useGL41Core)
+			bitmap = std::make_unique<CBitmap>(bm);
+
+		const GLuint texID = globalRendering->useGL41Core ? 0 : bm.CreateMipMapTexture();
+		it = filenameToTexID.emplace(refFileName, FileTexEntry{ texID, stableIdx, std::move(bitmap) }).first;
 	}
 
 	const auto uniqueSubTex = UniqueSubTexture(
@@ -349,6 +357,136 @@ bool CTextureRenderAtlas::CalculateAtlas()
 	return atlasFinalized;
 }
 
+bool CTextureRenderAtlas::CreateAtlasTextureCPU()
+{
+	if (glInternalType != GL_RGBA8) {
+		LOG_L(L_ERROR, "CTextureRenderAtlas::%s() atlas=%s unsupported internal format=0x%x", __func__, atlasName.c_str(), glInternalType);
+		return false;
+	}
+
+	const auto numLevels = atlasAllocator->GetNumTexLevels();
+	const auto numPages = atlasAllocator->GetNumPages();
+	const auto& atlasSize = atlasAllocator->GetAtlasSize();
+
+	if (atlasSize.x == 0 || atlasSize.y == 0 || numPages == 0) {
+		LOG_L(L_ERROR, "CTextureRenderAtlas::%s() atlas=%s invalid size=<%u,%u,%u>", __func__, atlasName.c_str(), atlasSize.x, atlasSize.y, numPages);
+		return false;
+	}
+
+	const size_t pagePixels = static_cast<size_t>(atlasSize.x) * static_cast<size_t>(atlasSize.y);
+	if (pagePixels > (std::numeric_limits<size_t>::max() / 4u)) {
+		LOG_L(L_ERROR, "CTextureRenderAtlas::%s() atlas=%s size overflow", __func__, atlasName.c_str());
+		return false;
+	}
+
+	std::vector<std::vector<uint8_t>> atlasPages(
+		numPages,
+		std::vector<uint8_t>(pagePixels * 4u, 0)
+	);
+
+	spring::unordered_map<uint32_t, const CBitmap*> bitmaps;
+	bitmaps.reserve(filenameToTexID.size());
+	for (const auto& [_, fileEntry] : filenameToTexID) {
+		const CBitmap* bitmap = fileEntry.bitmap.get();
+		if (bitmap == nullptr || bitmap->compressed || bitmap->GetRawMem() == nullptr || bitmap->channels != 4 || bitmap->dataType != GL_UNSIGNED_BYTE) {
+			LOG_L(L_ERROR, "CTextureRenderAtlas::%s() atlas=%s contains an unsupported CPU source", __func__, atlasName.c_str());
+			return false;
+		}
+
+		bitmaps.emplace(fileEntry.stableIdx, bitmap);
+	}
+
+	const int halfPad = atlasAllocator->GetPadding() / 2;
+	for (const auto& [uniqueName, atlasEntry] : atlasAllocator->GetEntries()) {
+		const auto uniqueIt = uniqueSubTextureMap.find(uniqueName);
+		if (uniqueIt == uniqueSubTextureMap.end()) {
+			LOG_L(L_ERROR, "CTextureRenderAtlas::%s() atlas=%s missing source metadata", __func__, atlasName.c_str());
+			return false;
+		}
+
+		const auto& uniqueTexture = uniqueIt->second;
+		const auto bitmapIt = bitmaps.find(uniqueTexture.stableIdx);
+		if (bitmapIt == bitmaps.end()) {
+			LOG_L(L_ERROR, "CTextureRenderAtlas::%s() atlas=%s missing source bitmap", __func__, atlasName.c_str());
+			return false;
+		}
+
+		const CBitmap& bitmap = *bitmapIt->second;
+		const int srcX = std::clamp(static_cast<int>(std::floor(uniqueTexture.subTexCoords.x * bitmap.xsize)), 0, bitmap.xsize - 1);
+		const int srcY = std::clamp(static_cast<int>(std::floor(uniqueTexture.subTexCoords.y * bitmap.ysize)), 0, bitmap.ysize - 1);
+		const int width = atlasEntry.size.x;
+		const int height = atlasEntry.size.y;
+
+		if (width <= 0 || height <= 0 || srcX + width > bitmap.xsize || srcY + height > bitmap.ysize || atlasEntry.texCoords.pageNum >= numPages) {
+			LOG_L(L_ERROR, "CTextureRenderAtlas::%s() atlas=%s invalid source or destination rectangle", __func__, atlasName.c_str());
+			return false;
+		}
+
+		const int dstX = static_cast<int>(atlasEntry.texCoords.x1);
+		const int dstY = static_cast<int>(atlasEntry.texCoords.y1);
+		const uint8_t* srcMem = bitmap.GetRawMem();
+		auto& dstMem = atlasPages[atlasEntry.texCoords.pageNum];
+
+		for (int y = -halfPad; y < height + halfPad; ++y) {
+			const int atlasY = dstY + y;
+			if (atlasY < 0 || atlasY >= static_cast<int>(atlasSize.y))
+				continue;
+
+			const int sourceY = srcY + std::clamp(y, 0, height - 1);
+			for (int x = -halfPad; x < width + halfPad; ++x) {
+				const int atlasX = dstX + x;
+				if (atlasX < 0 || atlasX >= static_cast<int>(atlasSize.x))
+					continue;
+
+				const int sourceX = srcX + std::clamp(x, 0, width - 1);
+				const size_t srcOffset = (static_cast<size_t>(sourceY) * bitmap.xsize + sourceX) * 4u;
+				const size_t dstOffset = (static_cast<size_t>(atlasY) * atlasSize.x + atlasX) * 4u;
+				std::memcpy(dstMem.data() + dstOffset, srcMem + srcOffset, 4u);
+			}
+		}
+	}
+
+	GL::TextureCreationParams tcp{
+		.texID = atlasTex ? atlasTex->GetId() : 0,
+		.reqNumLevels = numLevels,
+		.linearMipMapFilter = true,
+		.linearTextureFilter = true,
+		.wrapMirror = false
+	};
+
+	atlasTex = nullptr;
+	if (numPages > 1) {
+		atlasTex = std::make_unique<GL::Texture2DArray>(atlasSize, numPages, glInternalType, tcp, false);
+		auto binding = atlasTex->ScopedBind();
+		const auto* texture = static_cast<GL::Texture2DArray*>(atlasTex.get());
+		for (uint32_t page = 0; page < numPages; ++page)
+			texture->UploadImage(atlasPages[page].data(), page);
+		texture->ProduceMipmaps();
+	} else {
+		atlasTex = std::make_unique<GL::Texture2D>(atlasSize, glInternalType, tcp, false);
+		auto binding = atlasTex->ScopedBind();
+		const auto* texture = static_cast<GL::Texture2D*>(atlasTex.get());
+		texture->UploadImage(atlasPages.front().data());
+		texture->ProduceMipmaps();
+	}
+
+	atlasRendered = (atlasTex && atlasTex->GetId() > 0);
+	LOG_L(L_INFO, "CTextureRenderAtlas::%s() atlas=%s atlasRendered=%d", __func__, atlasName.c_str(), atlasRendered);
+
+	if (!atlasRendered)
+		return false;
+
+	for (auto& [_, fileEntry] : filenameToTexID) {
+		if (fileEntry.texID) {
+			glDeleteTextures(1, &fileEntry.texID);
+			fileEntry.texID = 0;
+		}
+		fileEntry.bitmap = nullptr;
+	}
+
+	return true;
+}
+
 bool CTextureRenderAtlas::CreateAtlasTexture()
 {
 	if (!atlasFinalized)
@@ -366,6 +504,8 @@ bool CTextureRenderAtlas::CreateAtlasTexture()
 	const auto numPages = atlasAllocator->GetNumPages();
 
 	const auto& atlasSize = atlasAllocator->GetAtlasSize();
+	if (globalRendering->useGL41Core)
+		return CreateAtlasTextureCPU();
 
 	{
 		GL::TextureCreationParams tcp{
