@@ -64,6 +64,7 @@ CONFIG(int, GLContextMinorVersion).defaultValue(0).minimumValue(0).maximumValue(
 #endif
 CONFIG(int, MSAALevel).defaultValue(0).minimumValue(0).maximumValue(32).description("Enables multisample anti-aliasing; 'level' is the number of samples used.");
 CONFIG(float, MinSampleShadingRate).defaultValue(0.0f).minimumValue(0.0f).maximumValue(1.0f).description("A value of 1.0 indicates that each sample in the framebuffer should be independently shaded. A value of 0.0 effectively allows the GL to ignore sample rate shading. Any value between 0.0 and 1.0 allows the GL to shade only a subset of the total samples within each covered fragment.");
+CONFIG(bool, GL41AllowMSAA).defaultValue(false).description("Allow multisample context creation on the explicitly selected OpenGL 4.1 reduced route. Disabled by default to keep that compatibility route within a conservative framebuffer workload.");
 
 CONFIG(int, ForceDisablePersistentMapping).defaultValue(0).minimumValue(0).maximumValue(1);
 CONFIG(int, ForceDisableExplicitAttribLocs).defaultValue(0).minimumValue(0).maximumValue(1);
@@ -426,6 +427,15 @@ CGlobalRendering::CGlobalRendering()
 
 	const std::string selectedFeatureLevel = validFeatureLevel ? requestedFeatureLevel : "auto";
 	useGL41Core = (selectedFeatureLevel == "gl41");
+
+	if (useGL41Core && msaaLevel > 0 && !configHandler->GetBool("GL41AllowMSAA")) {
+		LOG_L(L_WARNING,
+			"[GR] GL4.1 reduced route suppressed MSAALevel=%d and MinSampleShadingRate=%.2f before context creation; set GL41AllowMSAA=1 to opt in",
+			msaaLevel, minSampleShadingRate
+		);
+		msaaLevel = 0;
+		minSampleShadingRate = 0.0f;
+	}
 
 	LOG("[GR] renderer selection: backend=%s OpenGLFeatureLevel=%s useGL41Core=%d ForceDisableGL4=%d ForceDisablePersistentMapping=%d",
 		requestedBackend.c_str(), selectedFeatureLevel.c_str(), useGL41Core, forceDisableGL4, forceDisablePersistentMapping);
