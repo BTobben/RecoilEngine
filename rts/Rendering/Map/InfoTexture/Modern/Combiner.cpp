@@ -62,6 +62,14 @@ CInfoTextureCombiner::~CInfoTextureCombiner()
 void CInfoTextureCombiner::SwitchMode(const std::string& name)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	// Some clients request a draw mode every update until GetMode() reports it.
+	// Remember failed requests, otherwise an unsupported shader is compiled and
+	// logged again every frame. Successful same-mode requests keep their old behavior,
+	// and switching away still permits a later retry.
+	if (!name.empty() && name == requestedMode && curMode.empty())
+		return;
+	requestedMode = name;
+
 	if (name.empty()) {
 		disabled = true;
 

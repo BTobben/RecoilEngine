@@ -34,6 +34,7 @@ private:
 private:
 	bool disabled;
 	std::string curMode;
+	std::string requestedMode;
 };
 
 #endif // _INFO_TEXTURE_COMBINER_H
