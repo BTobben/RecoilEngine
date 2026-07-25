@@ -432,10 +432,13 @@ bool CGroundDecalHandler::ReloadDecalShaders() {
 	decalShader->LoadFromLua("shaders/GLSL/groundDecals.lua");
 
 	decalShader->SetFlag("DEPTH_CLIP01", globalRendering->supportClipSpaceControl);
-	decalShader->SetFlag("HAVE_SHADOWS", true);
+	// Compile with the current dynamic state.  Using optimistic defaults here makes
+	// Draw() immediately change the flags again, which can turn a failed shader into
+	// an endless reload loop while the feature remains enabled.
+	decalShader->SetFlag("HAVE_SHADOWS", shadowHandler.ShadowsLoaded());
 	decalShader->SetFlag("HIGH_QUALITY", highQuality);
-	decalShader->SetFlag("HAVE_INFOTEX", true);
-	decalShader->SetFlag("SMF_WATER_ABSORPTION", true);
+	decalShader->SetFlag("HAVE_INFOTEX", infoTextureHandler->IsEnabled());
+	decalShader->SetFlag("SMF_WATER_ABSORPTION", smfDrawer->GetReadMap()->HasVisibleWater());
 	decalShader->SetFlag("USE_TEXTURE_ARRAY", atlasTex->GetTexTarget() == GL_TEXTURE_2D_ARRAY);
 
 	decalShader->BindAttribLocations<GroundDecal>();
