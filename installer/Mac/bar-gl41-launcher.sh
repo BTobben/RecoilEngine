@@ -17,6 +17,11 @@ else
 	if [ ! -f "$CONFIG" ]; then
 		cp "$BAR/common/configs/macos-gl41.cfg" "$CONFIG"
 	fi
+	# Existing installations predate the standalone game-over opt-out.  Add it
+	# only when absent so a deliberate user override remains respected.
+	if ! grep -Eq '^[[:space:]]*AutoQuitWithoutMenu=' "$CONFIG"; then
+		printf '\nAutoQuitWithoutMenu=0\n' >> "$CONFIG"
+	fi
 fi
 
 export SPRING_DATADIR="$RUNTIME:$BAR"
