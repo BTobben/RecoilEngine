@@ -12,6 +12,9 @@ out vec4 vUV;
 out float vLayer;
 out float vBF;
 
+uniform mat4 viewMatrix;
+uniform mat4 projectionMatrix;
+
 void main() {
 	float ap = fract(aparams.z);
 
@@ -40,7 +43,7 @@ void main() {
 	vLayer = uvw.z;
 	vCol = color;
 
-	vec4 lightVertexPos = gl_ModelViewMatrix * vec4(pos, 1.0);
+	vec4 lightVertexPos = viewMatrix * vec4(pos, 1.0);
 	lightVertexPos.xy += vec2(0.5);
-	gl_Position = gl_ProjectionMatrix * lightVertexPos;
+	gl_Position = projectionMatrix * lightVertexPos;
 }

@@ -20,6 +20,8 @@ out float gl_ClipDistance[1];
 uniform vec2 fogParams;
 uniform vec3 camPos;
 uniform vec4 clipPlane = vec4(0.0, 0.0, 0.0, 1.0);
+uniform mat4 viewMatrix;
+uniform mat4 projectionMatrix;
 
 #define NORM2SNORM(value) (value * 2.0 - 1.0)
 #define SNORM2NORM(value) (value * 0.5 + 0.5)
@@ -59,7 +61,7 @@ void main() {
 	gl_ClipDistance[0] = dot(vec4(pos, 1.0), clipPlane); //water clip plane
 
 	// viewport relative UV [0.0, 1.0]
-	vsPos = gl_ModelViewMatrix * vec4(pos, 1.0);
-	gl_Position = gl_ProjectionMatrix * vsPos;
+	vsPos = viewMatrix * vec4(pos, 1.0);
+	gl_Position = projectionMatrix * vsPos;
 	screenUV = SNORM2NORM(gl_Position.xy / gl_Position.w);
 }

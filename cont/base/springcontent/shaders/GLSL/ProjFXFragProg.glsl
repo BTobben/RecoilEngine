@@ -11,6 +11,7 @@ uniform float softenThreshold;
 uniform vec2 softenExponent;
 uniform vec4 alphaCtrl = vec4(0.0, 0.0, 0.0, 1.0); //always pass
 uniform vec3 fogColor;
+uniform mat4 projectionMatrix;
 
 in vec4 vCol;
 centroid in vec4 vUV;
@@ -22,7 +23,7 @@ noperspective in vec2 screenUV;
 
 out vec4 fragColor;
 
-#define projMatrix gl_ProjectionMatrix
+#define projMatrix projectionMatrix
 
 #define NORM2SNORM(value) (value * 2.0 - 1.0)
 #define SNORM2NORM(value) (value * 0.5 + 0.5)

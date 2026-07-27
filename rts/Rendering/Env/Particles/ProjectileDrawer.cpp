@@ -332,6 +332,8 @@ void CProjectileDrawer::Init() {
 	fxShader->SetUniform("camPos", 0.0f, 0.0f, 0.0f);
 	fxShader->SetUniform("fogColor", 0.0f, 0.0f, 0.0f);
 	fxShader->SetUniform("fogParams", 0.0f, 0.0f);
+	fxShader->SetUniformMatrix4x4("viewMatrix", false, GL::Legacy::ModelViewMatrix().m);
+	fxShader->SetUniformMatrix4x4("projectionMatrix", false, GL::Legacy::ProjectionMatrix().m);
 
 	fxShader->Disable();
 
@@ -839,6 +841,8 @@ void CProjectileDrawer::DrawAlpha(bool drawAboveWater, bool drawBelowWater, bool
 		fxShader->SetUniform("camPos", camPlayer->pos.x, camPlayer->pos.y, camPlayer->pos.z);
 		fxShader->SetUniform("fogColor", sky->fogColor.x, sky->fogColor.y, sky->fogColor.z);
 		fxShader->SetUniform("fogParams", sky->fogStart * camPlayer->GetFarPlaneDist(), sky->fogEnd * camPlayer->GetFarPlaneDist());
+		fxShader->SetUniformMatrix4x4("viewMatrix", false, GL::Legacy::ModelViewMatrix().m);
+		fxShader->SetUniformMatrix4x4("projectionMatrix", false, GL::Legacy::ProjectionMatrix().m);
 
 		rb.DrawElements(GL_TRIANGLES);
 
@@ -936,6 +940,8 @@ void CProjectileDrawer::DrawShadowTransparent()
 	fxShadowShader->Enable();
 	fxShadowShader->SetFlag("USE_TEXTURE_ARRAY", (textureAtlas->GetNumPages() > 1));
 	fxShadowShader->SetUniform("shadowColorMode", shadowHandler.shadowColorMode > 0 ? 1.0f : 0.0f);
+	fxShadowShader->SetUniformMatrix4x4("viewMatrix", false, GL::Legacy::ModelViewMatrix().m);
+	fxShadowShader->SetUniformMatrix4x4("projectionMatrix", false, GL::Legacy::ProjectionMatrix().m);
 
 	rb.DrawElements(GL_TRIANGLES);
 
@@ -1056,6 +1062,8 @@ void CProjectileDrawer::DrawGroundFlashes()
 	fxShader->SetUniform("camPos", camPlayer->pos.x, camPlayer->pos.y, camPlayer->pos.z);
 	fxShader->SetUniform("fogColor", sky->fogColor.x, sky->fogColor.y, sky->fogColor.z);
 	fxShader->SetUniform("fogParams", sky->fogStart * camPlayer->GetFarPlaneDist(), sky->fogEnd * camPlayer->GetFarPlaneDist());
+	fxShader->SetUniformMatrix4x4("viewMatrix", false, GL::Legacy::ModelViewMatrix().m);
+	fxShader->SetUniformMatrix4x4("projectionMatrix", false, GL::Legacy::ProjectionMatrix().m);
 
 	for (CGroundFlash* gf: gfc) {
 		const bool inLos = gf->alwaysVisible || gu->spectatingFullView || losHandler->InAirLos(gf, gu->myAllyTeam);
