@@ -5,6 +5,7 @@
 #include "Rendering/GlobalRendering.h"
 #include "Rendering/Shaders/ShaderHandler.h"
 #include "Rendering/Shaders/Shader.h"
+#include "Rendering/GL/RenderBuffers.h"
 #include "Rendering/GL/SubState.h"
 #include "Map/ReadMap.h"
 #include "System/Exceptions.h"
@@ -138,13 +139,27 @@ void CInfoTextureCombiner::Update()
 	const float isx = 2.0f * (mapDims.mapx / float(mapDims.pwr2mapx)) - 1.0f;
 	const float isy = 2.0f * (mapDims.mapy / float(mapDims.pwr2mapy)) - 1.0f;
 
-	// need to keep this old nonsence intact to keep Lua shaders compatible
-	glBegin(GL_QUADS);
-		glTexCoord2f(0.f, 0.f); glVertex2f(-1.f, -1.f);
-		glTexCoord2f(0.f, 1.f); glVertex2f(-1.f, +isy);
-		glTexCoord2f(1.f, 1.f); glVertex2f(+isx, +isy);
-		glTexCoord2f(1.f, 0.f); glVertex2f(+isx, -1.f);
-	glEnd();
+	if (globalRendering->useGL41Core) {
+		// The reduced GL4.1 route uses explicit attributes because Apple core
+		// contexts do not expose the fixed-function vertex interface.
+		auto& rb = RenderBuffer::GetTypedRenderBuffer<VA_TYPE_2DT>();
+		rb.AssertSubmission();
+		rb.AddQuadTriangles(
+			{-1.0f, +isy, 0.0f, 1.0f},
+			{+isx, +isy, 1.0f, 1.0f},
+			{+isx, -1.0f, 1.0f, 0.0f},
+			{-1.0f, -1.0f, 0.0f, 0.0f}
+		);
+		rb.DrawElements(GL_TRIANGLES);
+	} else {
+		// Keep the fixed-function path for existing compatibility-profile shaders.
+		glBegin(GL_QUADS);
+			glTexCoord2f(0.f, 0.f); glVertex2f(-1.f, -1.f);
+			glTexCoord2f(0.f, 1.f); glVertex2f(-1.f, +isy);
+			glTexCoord2f(1.f, 1.f); glVertex2f(+isx, +isy);
+			glTexCoord2f(1.f, 0.f); glVertex2f(+isx, -1.f);
+		glEnd();
+	}
 
 	shader->Disable();
 	shader->UnbindTextures();
